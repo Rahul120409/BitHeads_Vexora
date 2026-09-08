@@ -121,13 +121,13 @@ export default function AdminLocationsPage() {
     <div className="space-y-8 animate-in fade-in duration-300">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#cce0e6]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#EADFD7]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0c242c] flex items-center gap-2.5">
-            <MapPin className="w-7 h-7 text-[#23b5d3]" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#381E11] flex items-center gap-2.5">
+            <MapPin className="w-7 h-7 text-[#6B3820]" />
             Location & Region Management
           </h1>
-          <p className="text-sm text-[#0c242c]/70 mt-1 font-medium">
+          <p className="text-sm text-[#381E11]/70 mt-1 font-medium">
             Manage State Codes, State Names, City Codes, and Cities for salon operations.
           </p>
         </div>
@@ -135,9 +135,9 @@ export default function AdminLocationsPage() {
         <button
           onClick={loadLocationsData}
           disabled={isRefreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-extrabold bg-white hover:bg-[#EFF5F7] text-[#0c242c] rounded-xl border border-[#c2dee6] transition-all duration-150 shadow-xs"
+          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-extrabold bg-white hover:bg-[#FAF6F0] text-[#381E11] rounded-xl border border-[#EADFD7] transition-all duration-150 shadow-xs"
         >
-          <RefreshCw className={`w-4 h-4 text-[#23b5d3] ${isRefreshing ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-4 h-4 text-[#6B3820] ${isRefreshing ? "animate-spin" : ""}`} />
           Refresh Data
         </button>
       </div>
@@ -146,20 +146,20 @@ export default function AdminLocationsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* CARD 1: Add State Card */}
-        <div className="p-5 rounded-2xl bg-white border border-[#c2dee6] space-y-4 shadow-xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#EFF5F7]">
-            <h2 className="text-base font-extrabold text-[#0c242c] flex items-center gap-2">
-              <Globe className="w-5 h-5 text-[#23b5d3]" />
+        <div className="p-5 rounded-2xl bg-white border border-[#EADFD7] space-y-4 shadow-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-[#FAF6F0]">
+            <h2 className="text-base font-extrabold text-[#381E11] flex items-center gap-2">
+              <Globe className="w-5 h-5 text-[#6B3820]" />
               Add State Card
             </h2>
-            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#23b5d3]/15 text-[#147a90] border border-[#23b5d3]/30">
+            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#6B3820]/15 text-[#6B3820] border border-[#6B3820]/30">
               State Form
             </span>
           </div>
 
           <form onSubmit={handleSaveState} className="space-y-4 text-xs font-semibold">
             <div>
-              <label className="block text-[#0c242c]/80 mb-1">State Code</label>
+              <label className="block text-[#381E11]/80 mb-1">State Code</label>
               <input
                 type="text"
                 value={inputStateCode}
@@ -167,19 +167,19 @@ export default function AdminLocationsPage() {
                 placeholder="e.g. KA, MH, DL, GJ"
                 maxLength={4}
                 required
-                className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-mono font-bold uppercase placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-mono font-bold uppercase placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               />
             </div>
 
             <div>
-              <label className="block text-[#0c242c]/80 mb-1">State Name</label>
+              <label className="block text-[#381E11]/80 mb-1">State Name</label>
               <input
                 type="text"
                 value={inputStateName}
                 onChange={(e) => setInputStateName(e.target.value)}
                 placeholder="e.g. Karnataka, Maharashtra, Delhi"
                 required
-                className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               />
             </div>
 
@@ -187,14 +187,14 @@ export default function AdminLocationsPage() {
               <button
                 type="button"
                 onClick={handleCancelState}
-                className="inline-flex items-center gap-1 px-4 py-2 bg-[#EFF5F7] text-[#0c242c] rounded-xl hover:bg-slate-200 font-bold transition-colors"
+                className="inline-flex items-center gap-1 px-4 py-2 bg-[#FAF6F0] text-[#381E11] rounded-xl hover:bg-[#EADFD7] font-bold transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
                 Cancel
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 px-4 py-2 bg-[#23b5d3] text-white rounded-xl hover:bg-[#1a9fba] font-extrabold shadow-md shadow-[#23b5d3]/30 transition-colors"
+                className="inline-flex items-center gap-1 px-4 py-2 bg-[#6B3820] text-white rounded-xl hover:bg-[#542C19] font-extrabold shadow-md shadow-[#6B3820]/30 transition-colors"
               >
                 <Check className="w-3.5 h-3.5" />
                 Save State
@@ -204,25 +204,25 @@ export default function AdminLocationsPage() {
         </div>
 
         {/* CARD 2: Add City Card */}
-        <div className="p-5 rounded-2xl bg-white border border-[#c2dee6] space-y-4 shadow-xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#EFF5F7]">
-            <h2 className="text-base font-extrabold text-[#0c242c] flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#23b5d3]" />
+        <div className="p-5 rounded-2xl bg-white border border-[#EADFD7] space-y-4 shadow-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-[#FAF6F0]">
+            <h2 className="text-base font-extrabold text-[#381E11] flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-[#6B3820]" />
               Add City Card
             </h2>
-            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#23b5d3]/15 text-[#147a90] border border-[#23b5d3]/30">
+            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#6B3820]/15 text-[#6B3820] border border-[#6B3820]/30">
               City Form
             </span>
           </div>
 
           <form onSubmit={handleSaveCity} className="space-y-4 text-xs font-semibold">
             <div>
-              <label className="block text-[#0c242c]/80 mb-1">Select State</label>
+              <label className="block text-[#381E11]/80 mb-1">Select State</label>
               <select
                 value={selectedStateName}
                 onChange={(e) => setSelectedStateName(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-bold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-bold focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               >
                 <option value="">-- Select a State --</option>
                 {states.map((st) => (
@@ -234,7 +234,7 @@ export default function AdminLocationsPage() {
             </div>
 
             <div>
-              <label className="block text-[#0c242c]/80 mb-1">City Code</label>
+              <label className="block text-[#381E11]/80 mb-1">City Code</label>
               <input
                 type="text"
                 value={inputCityCode}
@@ -242,19 +242,19 @@ export default function AdminLocationsPage() {
                 placeholder="e.g. BLR, BOM, PNE, DEL"
                 maxLength={5}
                 required
-                className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-mono font-bold uppercase placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-mono font-bold uppercase placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               />
             </div>
 
             <div>
-              <label className="block text-[#0c242c]/80 mb-1">City Name</label>
+              <label className="block text-[#381E11]/80 mb-1">City Name</label>
               <input
                 type="text"
                 value={inputCityName}
                 onChange={(e) => setInputCityName(e.target.value)}
                 placeholder="e.g. Bangalore, Mumbai, Pune"
                 required
-                className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               />
             </div>
 
@@ -262,14 +262,14 @@ export default function AdminLocationsPage() {
               <button
                 type="button"
                 onClick={handleCancelCity}
-                className="inline-flex items-center gap-1 px-4 py-2 bg-[#EFF5F7] text-[#0c242c] rounded-xl hover:bg-slate-200 font-bold transition-colors"
+                className="inline-flex items-center gap-1 px-4 py-2 bg-[#FAF6F0] text-[#381E11] rounded-xl hover:bg-[#EADFD7] font-bold transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
                 Cancel
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 px-4 py-2 bg-[#23b5d3] text-white rounded-xl hover:bg-[#1a9fba] font-extrabold shadow-md shadow-[#23b5d3]/30 transition-colors"
+                className="inline-flex items-center gap-1 px-4 py-2 bg-[#6B3820] text-white rounded-xl hover:bg-[#542C19] font-extrabold shadow-md shadow-[#6B3820]/30 transition-colors"
               >
                 <Check className="w-3.5 h-3.5" />
                 Save City
@@ -284,13 +284,13 @@ export default function AdminLocationsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* States Overview List (1 Col) */}
-        <div className="p-5 rounded-2xl bg-white border border-[#c2dee6] space-y-4 shadow-xs">
+        <div className="p-5 rounded-2xl bg-white border border-[#EADFD7] space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-extrabold text-[#0c242c] flex items-center gap-2">
-              <Globe className="w-5 h-5 text-[#23b5d3]" />
+            <h2 className="text-base font-extrabold text-[#381E11] flex items-center gap-2">
+              <Globe className="w-5 h-5 text-[#6B3820]" />
               Registered States
             </h2>
-            <span className="text-xs font-bold text-[#147a90] bg-[#23b5d3]/15 px-2 py-0.5 rounded-full border border-[#23b5d3]/30">
+            <span className="text-xs font-bold text-[#6B3820] bg-[#6B3820]/15 px-2 py-0.5 rounded-full border border-[#6B3820]/30">
               {states.length} Total
             </span>
           </div>
@@ -299,15 +299,15 @@ export default function AdminLocationsPage() {
             {states.map((st) => (
               <div 
                 key={st.id || st.stateCode}
-                className="p-3 rounded-xl bg-[#EFF5F7] border border-[#c2dee6] flex items-center justify-between gap-3 hover:border-[#23b5d3] transition-colors"
+                className="p-3 rounded-xl bg-[#FAF6F0] border border-[#EADFD7] flex items-center justify-between gap-3 hover:border-[#6B3820] transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-[#23b5d3] text-white flex items-center justify-center font-mono font-extrabold text-xs">
+                  <span className="w-8 h-8 rounded-lg bg-[#6B3820] text-white flex items-center justify-center font-mono font-extrabold text-xs">
                     {st.stateCode}
                   </span>
-                  <span className="text-xs font-extrabold text-[#0c242c]">{st.stateName}</span>
+                  <span className="text-xs font-extrabold text-[#381E11]">{st.stateName}</span>
                 </div>
-                <span className="text-[10px] font-bold text-[#23b5d3] bg-white px-2 py-1 rounded-md border border-[#c2dee6]">
+                <span className="text-[10px] font-bold text-[#6B3820] bg-white px-2 py-1 rounded-md border border-[#EADFD7]">
                   Code: {st.stateCode}
                 </span>
               </div>
@@ -316,28 +316,28 @@ export default function AdminLocationsPage() {
         </div>
 
         {/* Cities Overview Table (2 Cols) */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-[#c2dee6] space-y-4 shadow-xs">
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-[#EADFD7] space-y-4 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#23b5d3]" />
-              <h2 className="text-base font-extrabold text-[#0c242c]">Registered Cities</h2>
+              <Building2 className="w-5 h-5 text-[#6B3820]" />
+              <h2 className="text-base font-extrabold text-[#381E11]">Registered Cities</h2>
             </div>
 
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#23b5d3]" />
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#6B3820]" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search city, code or state..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-semibold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-semibold focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
               />
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="text-[#147a90] uppercase bg-[#EFF5F7] border-b border-[#cce0e6] text-[10px] font-extrabold tracking-wider">
+              <thead className="text-[#6B3820] uppercase bg-[#FAF6F0] border-b border-[#EADFD7] text-[10px] font-extrabold tracking-wider">
                 <tr>
                   <th className="px-4 py-3">City Code</th>
                   <th className="px-4 py-3">City Name</th>
@@ -345,20 +345,20 @@ export default function AdminLocationsPage() {
                   <th className="px-4 py-3 text-right">State Code</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#cce0e6]/60">
+              <tbody className="divide-y divide-[#EADFD7]/60">
                 {filteredCities.map((c, idx) => (
-                  <tr key={c.id || idx} className="hover:bg-[#EFF5F7]/80 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-[#23b5d3]">
-                      <span className="px-2 py-0.5 rounded bg-[#23b5d3]/15 border border-[#23b5d3]/30">
+                  <tr key={c.id || idx} className="hover:bg-[#FAF6F0]/80 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-[#6B3820]">
+                      <span className="px-2 py-0.5 rounded bg-[#6B3820]/15 border border-[#6B3820]/30">
                         {c.cityCode}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-extrabold text-[#0c242c] flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#23b5d3]" />
+                    <td className="px-4 py-3 font-extrabold text-[#381E11] flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-[#6B3820]" />
                       {c.cityName}
                     </td>
-                    <td className="px-4 py-3 font-bold text-[#147a90]">{c.stateName || "Karnataka"}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-[#23b5d3]">
+                    <td className="px-4 py-3 font-bold text-[#6B3820]">{c.stateName || "Karnataka"}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-[#6B3820]">
                       {c.stateCode || "KA"}
                     </td>
                   </tr>

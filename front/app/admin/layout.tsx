@@ -12,7 +12,7 @@ export default function AdminLayout({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#EFF5F7] text-[#0c242c] flex flex-col font-sans selection:bg-[#23b5d3] selection:text-white">
+    <div className="min-h-screen bg-[#FAF6F0] text-[#381E11] flex flex-col font-sans selection:bg-[#6B3820] selection:text-white">
       {/* Top Admin Navbar */}
       <AdminNavbar
         onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
@@ -28,7 +28,7 @@ export default function AdminLayout({
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-[#EFF5F7] min-h-[calc(100vh-57px)] overflow-x-hidden">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 bg-[#FAF6F0] min-h-[calc(100vh-57px)] overflow-x-hidden">
           <div className="max-w-7xl mx-auto space-y-6">
             {children}
           </div>

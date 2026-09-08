@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Moon, Sun } from 'lucide-react';
 import { customerService } from '../../services/customerService';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '../../hooks/useTheme';
 
 export default function LoginPage() {
   const { isDark, toggle, mounted } = useTheme();

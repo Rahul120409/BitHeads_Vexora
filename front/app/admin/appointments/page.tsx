@@ -31,37 +31,37 @@ export default function AdminAppointmentsPage() {
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#cce0e6]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#EADFD7]">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-[#0c242c] flex items-center gap-2.5">
-            <CalendarDays className="w-6 h-6 text-[#23b5d3]" />
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#381E11] flex items-center gap-2.5">
+            <CalendarDays className="w-6 h-6 text-[#6B3820]" />
             Appointment Monitoring
           </h1>
-          <p className="text-sm text-[#0c242c]/70 mt-1 font-medium">
+          <p className="text-sm text-[#381E11]/70 mt-1 font-medium">
             Track, filter, and inspect all customer bookings across staff schedules.
           </p>
         </div>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-[#c2dee6] shadow-xs">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-[#EADFD7] shadow-xs">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#23b5d3]" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B3820]" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by customer, service or staff..."
-            className="w-full pl-9 pr-4 py-2 text-xs bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3] font-semibold"
+            className="w-full pl-9 pr-4 py-2 text-xs bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820] font-semibold"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-[#23b5d3] shrink-0" />
+          <Filter className="w-4 h-4 text-[#6B3820] shrink-0" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-xs bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-bold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+            className="px-3 py-2 text-xs bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-bold focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
           >
             <option value="ALL">All Statuses</option>
             <option value="CONFIRMED">Confirmed</option>
@@ -73,9 +73,9 @@ export default function AdminAppointmentsPage() {
       </div>
 
       {/* Appointment Table */}
-      <div className="p-5 rounded-2xl bg-white border border-[#c2dee6] overflow-x-auto shadow-xs">
+      <div className="p-5 rounded-2xl bg-white border border-[#EADFD7] overflow-x-auto shadow-xs">
         <table className="w-full text-left text-xs">
-          <thead className="text-[#147a90] uppercase bg-[#EFF5F7] border-b border-[#cce0e6] text-[10px] font-extrabold tracking-wider">
+          <thead className="text-[#6B3820] uppercase bg-[#FAF6F0] border-b border-[#EADFD7] text-[10px] font-extrabold tracking-wider">
             <tr>
               <th className="px-4 py-3">ID</th>
               <th className="px-4 py-3">Customer</th>
@@ -86,21 +86,21 @@ export default function AdminAppointmentsPage() {
               <th className="px-4 py-3 text-right">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#cce0e6]/60">
+          <tbody className="divide-y divide-[#EADFD7]/60">
             {filteredAppointments.map((app) => (
-              <tr key={app.id} className="hover:bg-[#EFF5F7]/80 transition-colors">
-                <td className="px-4 py-3.5 font-mono text-[#23b5d3] font-extrabold">#{app.id}</td>
-                <td className="px-4 py-3.5 font-bold text-[#0c242c]">{app.customer}</td>
-                <td className="px-4 py-3.5 text-[#0c242c]/80 font-medium">{app.service}</td>
-                <td className="px-4 py-3.5 text-[#0c242c]/70 font-medium">{app.staff}</td>
-                <td className="px-4 py-3.5 font-mono text-[#0c242c] font-bold">{app.time}</td>
-                <td className="px-4 py-3.5 font-extrabold text-[#23b5d3]">{app.price}</td>
+              <tr key={app.id} className="hover:bg-[#FAF6F0]/80 transition-colors">
+                <td className="px-4 py-3.5 font-mono text-[#6B3820] font-extrabold">#{app.id}</td>
+                <td className="px-4 py-3.5 font-bold text-[#381E11]">{app.customer}</td>
+                <td className="px-4 py-3.5 text-[#381E11]/80 font-medium">{app.service}</td>
+                <td className="px-4 py-3.5 text-[#381E11]/70 font-medium">{app.staff}</td>
+                <td className="px-4 py-3.5 font-mono text-[#381E11] font-bold">{app.time}</td>
+                <td className="px-4 py-3.5 font-extrabold text-[#6B3820]">{app.price}</td>
                 <td className="px-4 py-3.5 text-right">
                   <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full border ${
                     app.status === "CONFIRMED" 
-                      ? "bg-[#23b5d3]/15 text-[#147a90] border-[#23b5d3]/30" 
+                      ? "bg-[#6B3820]/15 text-[#6B3820] border-[#6B3820]/30" 
                       : app.status === "WAITING"
-                      ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
+                      ? "bg-amber-500/15 text-amber-800 border-amber-500/30"
                       : app.status === "COMPLETED"
                       ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
                       : "bg-rose-500/15 text-rose-700 border-rose-500/30"

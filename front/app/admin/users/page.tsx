@@ -116,13 +116,13 @@ export default function AdminUsersPage() {
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#cce0e6]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#EADFD7]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0c242c] flex items-center gap-2.5">
-            <Users className="w-7 h-7 text-[#23b5d3]" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#381E11] flex items-center gap-2.5">
+            <Users className="w-7 h-7 text-[#6B3820]" />
             User Account Management
           </h1>
-          <p className="text-sm text-[#0c242c]/70 mt-1 font-medium">
+          <p className="text-sm text-[#381E11]/70 mt-1 font-medium">
             Manage user accounts across Customers, Staff, and Admins (`GET/POST /api/users`).
           </p>
         </div>
@@ -131,17 +131,17 @@ export default function AdminUsersPage() {
           <button
             onClick={loadUsersData}
             disabled={isRefreshing}
-            className="p-2 text-xs font-extrabold bg-white hover:bg-[#EFF5F7] text-[#0c242c] rounded-xl border border-[#c2dee6] transition-all duration-150 shadow-xs"
+            className="p-2 text-xs font-extrabold bg-white hover:bg-[#FAF6F0] text-[#381E11] rounded-xl border border-[#EADFD7] transition-all duration-150 shadow-xs"
             title="Refresh Users List"
           >
-            <RefreshCw className={`w-4 h-4 text-[#23b5d3] ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 text-[#6B3820] ${isRefreshing ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={() => {
               setErrorMessage("");
               setShowAddModal(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold bg-[#23b5d3] hover:bg-[#1a9fba] text-white rounded-xl shadow-md shadow-[#23b5d3]/30 transition-all duration-150"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold bg-[#6B3820] hover:bg-[#542C19] text-white rounded-xl shadow-md shadow-[#6B3820]/30 transition-all duration-150"
           >
             <Plus className="w-4 h-4" />
             Add New User
@@ -150,24 +150,24 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-[#c2dee6] shadow-xs">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-[#EADFD7] shadow-xs">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#23b5d3]" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#6B3820]" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name, email, or mobile..."
-            className="w-full pl-9 pr-4 py-2 text-xs bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3] font-semibold"
+            className="w-full pl-9 pr-4 py-2 text-xs bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820] font-semibold"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-[#23b5d3] shrink-0" />
+          <Filter className="w-4 h-4 text-[#6B3820] shrink-0" />
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-3 py-2 text-xs bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-extrabold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+            className="px-3 py-2 text-xs bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-extrabold focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
           >
             <option value="ALL">All Roles</option>
             <option value="CUSTOMER">Customers</option>
@@ -178,9 +178,9 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Users Table */}
-      <div className="p-5 rounded-2xl bg-white border border-[#c2dee6] overflow-x-auto shadow-xs">
+      <div className="p-5 rounded-2xl bg-white border border-[#EADFD7] overflow-x-auto shadow-xs">
         <table className="w-full text-left text-xs">
-          <thead className="text-[#147a90] uppercase bg-[#EFF5F7] border-b border-[#cce0e6] text-[10px] font-extrabold tracking-wider">
+          <thead className="text-[#6B3820] uppercase bg-[#FAF6F0] border-b border-[#EADFD7] text-[10px] font-extrabold tracking-wider">
             <tr>
               <th className="px-4 py-3">ID</th>
               <th className="px-4 py-3">Full Name</th>
@@ -189,33 +189,33 @@ export default function AdminUsersPage() {
               <th className="px-4 py-3 text-right">Role</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#cce0e6]/60">
+          <tbody className="divide-y divide-[#EADFD7]/60">
             {filteredUsers.map((u) => (
-              <tr key={u.id} className="hover:bg-[#EFF5F7]/80 transition-colors">
-                <td className="px-4 py-3.5 font-mono text-[#23b5d3] font-extrabold">#{u.id}</td>
-                <td className="px-4 py-3.5 font-bold text-[#0c242c] flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#23b5d3]/15 text-[#23b5d3] font-extrabold flex items-center justify-center text-xs">
+              <tr key={u.id} className="hover:bg-[#FAF6F0]/80 transition-colors">
+                <td className="px-4 py-3.5 font-mono text-[#6B3820] font-extrabold">#{u.id}</td>
+                <td className="px-4 py-3.5 font-bold text-[#381E11] flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#6B3820]/15 text-[#6B3820] font-extrabold flex items-center justify-center text-xs">
                     {u.name ? u.name.charAt(0) : "U"}
                   </div>
                   {u.name}
                 </td>
-                <td className="px-4 py-3.5 text-[#0c242c]/80 font-medium">
+                <td className="px-4 py-3.5 text-[#381E11]/80 font-medium">
                   <span className="flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-[#23b5d3]" /> {u.email}
+                    <Mail className="w-3.5 h-3.5 text-[#6B3820]" /> {u.email}
                   </span>
                 </td>
-                <td className="px-4 py-3.5 text-[#0c242c]/80 font-mono font-semibold">
+                <td className="px-4 py-3.5 text-[#381E11]/80 font-mono font-semibold">
                   <span className="flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5 text-[#23b5d3]" /> {u.mobileNumber || "-"}
+                    <Phone className="w-3.5 h-3.5 text-[#6B3820]" /> {u.mobileNumber || "-"}
                   </span>
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full border ${
                     u.role === "ADMIN"
-                      ? "bg-[#23b5d3] text-white border-[#23b5d3]"
+                      ? "bg-[#6B3820] text-white border-[#6B3820]"
                       : u.role === "SALON_OWNER"
-                      ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
-                      : "bg-slate-200 text-slate-700 border-slate-300"
+                      ? "bg-amber-500/15 text-amber-800 border-amber-500/30"
+                      : "bg-[#FAF6F0] text-[#381E11] border-[#EADFD7]"
                   }`}>
                     {u.role}
                   </span>
@@ -228,17 +228,17 @@ export default function AdminUsersPage() {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-[#0c242c]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-[#c2dee6] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-[#381E11]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-[#EADFD7] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
             
-            <div className="flex items-center justify-between border-b border-[#EFF5F7] pb-3">
-              <h3 className="text-lg font-extrabold text-[#0c242c] flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-[#23b5d3]" />
+            <div className="flex items-center justify-between border-b border-[#FAF6F0] pb-3">
+              <h3 className="text-lg font-extrabold text-[#381E11] flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-[#6B3820]" />
                 Register New User Account
               </h3>
               <button 
                 onClick={() => setShowAddModal(false)} 
-                className="text-[#0c242c]/60 hover:text-[#0c242c] p-1 rounded-lg hover:bg-[#EFF5F7]"
+                className="text-[#381E11]/60 hover:text-[#381E11] p-1 rounded-lg hover:bg-[#FAF6F0]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -253,75 +253,75 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleAddUser} className="space-y-4 text-xs font-semibold">
               <div>
-                <label className="block text-[#0c242c]/80 mb-1">Full Name</label>
+                <label className="block text-[#381E11]/80 mb-1">Full Name</label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Karan Malhotra"
                   required
-                  className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                  className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[#0c242c]/80 mb-1">Email Address</label>
+                  <label className="block text-[#381E11]/80 mb-1">Email Address</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. karan@example.com"
                     required
-                    className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                    className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#0c242c]/80 mb-1">Mobile Number</label>
+                  <label className="block text-[#381E11]/80 mb-1">Mobile Number</label>
                   <input
                     type="tel"
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value)}
                     placeholder="e.g. 9876543210"
                     required
-                    className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] placeholder-[#0c242c]/40 focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                    className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] placeholder-[#381E11]/40 focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[#0c242c]/80 mb-1">Password</label>
+                  <label className="block text-[#381E11]/80 mb-1">Password</label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                    className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#0c242c]/80 mb-1">Confirm Password</label>
+                  <label className="block text-[#381E11]/80 mb-1">Confirm Password</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                    className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[#0c242c]/80 mb-1">Role & User Type</label>
+                <label className="block text-[#381E11]/80 mb-1">Role & User Type</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-bold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
+                  className="w-full px-3 py-2 bg-[#FAF6F0] border border-[#EADFD7] rounded-xl text-[#381E11] font-bold focus:outline-none focus:ring-2 focus:ring-[#6B3820]"
                 >
                   <option value="CUSTOMER">CUSTOMER</option>
                   <option value="SALON_OWNER">SALON_OWNER</option>
@@ -329,17 +329,17 @@ export default function AdminUsersPage() {
                 </select>
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#EFF5F7]">
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#FAF6F0]">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-[#EFF5F7] text-[#0c242c] rounded-xl hover:bg-slate-200 font-bold"
+                  className="px-4 py-2 bg-[#FAF6F0] text-[#381E11] rounded-xl hover:bg-[#EADFD7] font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#23b5d3] text-white rounded-xl hover:bg-[#1a9fba] font-extrabold shadow-md shadow-[#23b5d3]/30"
+                  className="px-4 py-2 bg-[#6B3820] text-white rounded-xl hover:bg-[#542C19] font-extrabold shadow-md shadow-[#6B3820]/30"
                 >
                   Save User Account
                 </button>
