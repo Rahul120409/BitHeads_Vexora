@@ -33,7 +33,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserDTO[]>([
     { id: 1, name: "Rahul Sharma", email: "customer@demo.com", mobileNumber: "9876543210", role: "CUSTOMER", userType: "CUSTOMER", createdAt: "2026-09-08T10:57:07" },
     { id: 6, name: "Karan Malhotra", email: "karan@example.com", mobileNumber: "9876543210", role: "CUSTOMER", userType: "CUSTOMER", createdAt: "2026-09-08T12:03:42" },
-    { id: 2, name: "Raj Kumar", email: "raj@salonpulse.com", mobileNumber: "9812345678", role: "STAFF", userType: "STAFF", createdAt: "2026-09-08T11:00:00" },
+    { id: 2, name: "Raj Kumar", email: "raj@salonpulse.com", mobileNumber: "9812345678", role: "SALON_OWNER", userType: "SALON_OWNER", createdAt: "2026-09-08T11:00:00" },
     { id: 4, name: "Admin Manager", email: "admin@salonpulse.com", mobileNumber: "9900112233", role: "ADMIN", userType: "ADMIN", createdAt: "2026-09-08T09:00:00" },
   ]);
 
@@ -41,7 +41,13 @@ export default function AdminUsersPage() {
     setIsRefreshing(true);
     const fetchedUsers = await getAdminUsers();
     if (fetchedUsers && fetchedUsers.length > 0) {
-      setUsers(fetchedUsers);
+      // Map STAFF → SALON_OWNER for UI display
+      const mapped = fetchedUsers.map((u) => ({
+        ...u,
+        role: u.role === "STAFF" ? "SALON_OWNER" : u.role,
+        userType: u.userType === "STAFF" ? "SALON_OWNER" : u.userType,
+      }));
+      setUsers(mapped);
     }
     setIsRefreshing(false);
   };
@@ -79,13 +85,18 @@ export default function AdminUsersPage() {
       password: password,
       confirmPassword: confirmPassword,
       cnfPassword: confirmPassword,
-      role: role,
-      userType: role
+      // Send STAFF to backend; display as SALON_OWNER in UI
+      role: role === "SALON_OWNER" ? "STAFF" : role,
+      userType: role === "SALON_OWNER" ? "STAFF" : role
     };
 
     try {
       const savedUser = await createAdminUser(newUserPayload);
-      setUsers([savedUser || { ...newUserPayload, id: Date.now() }, ...users]);
+      // Show SALON_OWNER in local state regardless of what API returns
+      const displayUser = savedUser
+        ? { ...savedUser, role: role, userType: role }
+        : { ...newUserPayload, id: Date.now(), role: role, userType: role };
+      setUsers([displayUser, ...users]);
 
       // Reset Form
       setFullName("");
@@ -160,7 +171,7 @@ export default function AdminUsersPage() {
           >
             <option value="ALL">All Roles</option>
             <option value="CUSTOMER">Customers</option>
-            <option value="STAFF">Staff</option>
+            <option value="SALON_OWNER">Salon Owners</option>
             <option value="ADMIN">Admins</option>
           </select>
         </div>
@@ -202,7 +213,7 @@ export default function AdminUsersPage() {
                   <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full border ${
                     u.role === "ADMIN"
                       ? "bg-[#23b5d3] text-white border-[#23b5d3]"
-                      : u.role === "STAFF"
+                      : u.role === "SALON_OWNER"
                       ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
                       : "bg-slate-200 text-slate-700 border-slate-300"
                   }`}>
@@ -313,7 +324,7 @@ export default function AdminUsersPage() {
                   className="w-full px-3 py-2 bg-[#EFF5F7] border border-[#c2dee6] rounded-xl text-[#0c242c] font-bold focus:outline-none focus:ring-2 focus:ring-[#23b5d3]"
                 >
                   <option value="CUSTOMER">CUSTOMER</option>
-                  <option value="STAFF">STAFF</option>
+                  <option value="SALON_OWNER">SALON_OWNER</option>
                   <option value="ADMIN">ADMIN</option>
                 </select>
               </div>

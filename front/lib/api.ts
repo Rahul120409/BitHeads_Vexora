@@ -204,14 +204,17 @@ export async function getAdminUsers(): Promise<UserDTO[]> {
  */
 export async function createAdminUser(user: UserDTO): Promise<UserDTO | null> {
   try {
+    // Map UI role to backend enum (Java only accepts: STAFF, CUSTOMER, ADMIN)
+    const apiRole = user.role === "SALON_OWNER" ? "STAFF" : user.role;
+
     const payload = {
       name: user.name,
       email: user.email,
       mobileNumber: user.mobileNumber || "",
       password: user.password || "",
       confirmPassword: user.confirmPassword || user.password || "",
-      role: user.role,
-      userType: user.userType || user.role
+      role: apiRole,
+      userType: apiRole
     };
 
     const response = await fetch(`${API_BASE_URL}/users`, {
