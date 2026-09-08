@@ -4,15 +4,21 @@ import {
   StaffMember,
   CustomerAppointment,
   CustomerQueueStatus,
+  SalonLocation,
+  HaircutStyle,
+  NextAvailableQueueInfo,
+  defaultMockQueueInfo,
   mockCustomer,
   mockServices,
   mockStaffMembers,
+  mockNearbySalons,
+  mockHaircutStyles,
   initialMockQueue,
   initialMockAppointments
 } from '../mock/customerMock';
 
-// Default port 8085 as per backend specs
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8085/api';
+// Default port 8085 as per backend specs (loaded from .env if present)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://192.168.137.94:8085/api';
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
 // Helper for local storage persistence
@@ -353,93 +359,224 @@ export const customerService = {
     }
   },
 
-  // Book Appointment -> Enters queue
+  // Step 1: Live Queue & Next Available Token (GET /api/queue/next-available)
+  async getNextAvailableQueue(salonId?: number): Promise<NextAvailableQueueInfo> {
+    const storageKey = salonId ? `salonpulse_live_queue_${salonId}` : 'salonpulse_live_queue';
+    if (USE_MOCK) {
+      return getStoredData<NextAvailableQueueInfo>(storageKey, defaultMockQueueInfo);
+    }
+
+    try {
+      const query = salonId ? `?salonId=${salonId}` : '';
+      let res = await fetch(`${API_BASE_URL}/queue/next-available${query}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/queue/ongoing${query}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.nextAvailableToken || data.ongoingToken)) {
+          setStoredData(storageKey, data);
+          return data;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[customerService] Real-time /api/queue/next-available unreachable, using local fallback:', err.message);
+    }
+
+    return getStoredData<NextAvailableQueueInfo>(storageKey, defaultMockQueueInfo);
+  },
+
+  // Step 2: Book Appointment -> Assigns Token & Enters Queue (POST /api/appointments)
   async bookAppointment(bookingData: {
     customerId: number;
     serviceId: number;
-    staffId: number;
-    appointmentTime: string;
+    staffId?: number;
+    appointmentTime?: string;
     appointmentDate?: string;
+    salonId?: number;
+    selectedToken?: string;
+    serviceName?: string;
+    staffName?: string;
+    price?: number;
   }): Promise<{
     appointmentId: number;
+    tokenNumber: string;
     queuePosition: number;
     estimatedWaitMinutes: number;
     status: string;
   }> {
     const currentUser = this.getCurrentUser();
     const activeName = currentUser?.name || 'Customer';
+    const activePhone = currentUser?.phone || currentUser?.mobileNumber || '+91 98765 43210';
+
+    const payload = {
+      customerId: bookingData.customerId,
+      serviceId: bookingData.serviceId,
+      staffId: bookingData.staffId || 2,
+      appointmentTime: bookingData.appointmentTime || new Date().toISOString().replace(/\.\d+Z$/, '')
+    };
 
     if (USE_MOCK) {
       await new Promise((r) => setTimeout(r, 400));
-      const services = await this.getServices();
-      const staff = await this.getStaff();
-      const selectedService = services.find((s) => s.id === bookingData.serviceId) || services[0];
-      const selectedStaff = staff.find((st) => st.id === bookingData.staffId) || staff[0];
+      const queueInfo = await this.getNextAvailableQueue(bookingData.salonId);
+      const assignedToken = bookingData.selectedToken || queueInfo.nextAvailableToken || 'T-003';
+      const position = queueInfo.nextQueuePosition || 3;
+      const waitMinutes = queueInfo.estimatedWaitMinutesForNext || 35;
+      const newAptId = Math.floor(Math.random() * 1000) + 10;
 
+      const confirmedTicket = {
+        appointmentId: newAptId,
+        tokenNumber: assignedToken,
+        queuePosition: position,
+        estimatedWaitMinutes: waitMinutes,
+        status: 'CONFIRMED'
+      };
+
+      // Save appointment record
       const currentAppointments = await this.getAppointments(bookingData.customerId);
-      const newId = 100 + currentAppointments.length + 1;
-      const currentQueue = await this.getQueueStatus(bookingData.customerId);
-      const nextPosition = currentQueue ? currentQueue.position + 1 : 1;
-      const waitMinutes = nextPosition * 15;
-
       const newAppointment: CustomerAppointment = {
-        id: newId,
-        serviceId: selectedService.id,
-        serviceName: selectedService.name,
-        staffId: selectedStaff.id,
-        staffName: selectedStaff.name,
-        appointmentTime: bookingData.appointmentTime,
+        id: newAptId,
+        tokenNumber: assignedToken,
+        serviceId: bookingData.serviceId,
+        serviceName: bookingData.serviceName || 'Classic Fade Haircut',
+        staffId: bookingData.staffId || 2,
+        staffName: bookingData.staffName || 'Alex Rivera',
+        appointmentTime: bookingData.appointmentTime || 'Today (Live Queue)',
         appointmentDate: bookingData.appointmentDate || 'Today',
-        price: selectedService.price,
+        price: bookingData.price || 350,
         status: 'CONFIRMED',
         paymentStatus: 'PENDING',
         refundStatus: 'NOT_REQUESTED',
-        queuePosition: nextPosition,
+        queuePosition: position,
         estimatedWaitMinutes: waitMinutes
       };
+      setStoredData('salonpulse_appointments', [newAppointment, ...currentAppointments]);
 
-      const updatedList = [newAppointment, ...currentAppointments];
-      setStoredData('salonpulse_appointments', updatedList);
-
+      // Save live queue tracking ticket
       const newQueueStatus: CustomerQueueStatus = {
-        queueId: 200 + newId,
-        appointmentId: newId,
+        queueId: newAptId,
+        appointmentId: newAptId,
+        tokenNumber: assignedToken,
         customerId: bookingData.customerId,
         customerName: activeName,
-        serviceName: selectedService.name,
-        staffName: selectedStaff.name,
-        position: nextPosition,
-        peopleAhead: Math.max(0, nextPosition - 1),
+        customerPhone: activePhone,
+        serviceName: bookingData.serviceName || 'Classic Fade Haircut',
+        service: bookingData.serviceName || 'Classic Fade Haircut',
+        durationMinutes: 30,
+        staffName: bookingData.staffName || 'Alex Rivera',
+        position: position,
+        peopleAhead: Math.max(0, position - 1),
         estimatedWaitMinutes: waitMinutes,
         status: 'WAITING',
         joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setStoredData('salonpulse_queue', newQueueStatus);
 
-      return {
-        appointmentId: newId,
-        queuePosition: nextPosition,
-        estimatedWaitMinutes: waitMinutes,
-        status: 'CONFIRMED'
-      };
+      return confirmedTicket;
     }
 
     try {
       const res = await fetch(`${API_BASE_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bookingData)
+        body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Failed to book appointment');
-      return res.json();
-    } catch {
-      return {
-        appointmentId: 101,
-        queuePosition: 3,
-        estimatedWaitMinutes: 30,
-        status: 'CONFIRMED'
-      };
+
+      if (res.ok) {
+        const data = await res.json();
+        const confirmed = {
+          appointmentId: data.appointmentId || data.id || Math.floor(Math.random() * 1000) + 10,
+          tokenNumber: data.tokenNumber || bookingData.selectedToken || 'T-003',
+          queuePosition: data.queuePosition || data.position || 3,
+          estimatedWaitMinutes: data.estimatedWaitMinutes || 35,
+          status: data.status || 'CONFIRMED'
+        };
+
+        // Save appointment record
+        const currentAppointments = await this.getAppointments(bookingData.customerId);
+        const newAppointment: CustomerAppointment = {
+          id: confirmed.appointmentId,
+          tokenNumber: confirmed.tokenNumber,
+          serviceId: bookingData.serviceId,
+          serviceName: bookingData.serviceName || 'Classic Fade Haircut',
+          staffId: bookingData.staffId || 2,
+          staffName: bookingData.staffName || 'Alex Rivera',
+          appointmentTime: bookingData.appointmentTime || 'Today (Live Queue)',
+          appointmentDate: bookingData.appointmentDate || 'Today',
+          price: bookingData.price || 350,
+          status: 'CONFIRMED',
+          paymentStatus: 'PENDING',
+          refundStatus: 'NOT_REQUESTED',
+          queuePosition: confirmed.queuePosition,
+          estimatedWaitMinutes: confirmed.estimatedWaitMinutes
+        };
+        setStoredData('salonpulse_appointments', [newAppointment, ...currentAppointments]);
+
+        // Save live queue tracking ticket
+        const newQueueStatus: CustomerQueueStatus = {
+          queueId: confirmed.appointmentId,
+          appointmentId: confirmed.appointmentId,
+          tokenNumber: confirmed.tokenNumber,
+          customerId: bookingData.customerId,
+          customerName: activeName,
+          customerPhone: activePhone,
+          serviceName: bookingData.serviceName || 'Classic Fade Haircut',
+          service: bookingData.serviceName || 'Classic Fade Haircut',
+          durationMinutes: 30,
+          staffName: bookingData.staffName || 'Alex Rivera',
+          position: confirmed.queuePosition,
+          peopleAhead: Math.max(0, confirmed.queuePosition - 1),
+          estimatedWaitMinutes: confirmed.estimatedWaitMinutes,
+          status: 'WAITING',
+          joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setStoredData('salonpulse_queue', newQueueStatus);
+
+        return confirmed;
+      }
+    } catch (err: any) {
+      console.warn('[customerService] POST /api/appointments failed, falling back to simulated ticket:', err.message);
     }
+
+    // Active session fallback if API is unreachable
+    const fallbackToken = bookingData.selectedToken || 'T-003';
+    const fallbackResult = {
+      appointmentId: 3,
+      tokenNumber: fallbackToken,
+      queuePosition: 3,
+      estimatedWaitMinutes: 35,
+      status: 'CONFIRMED'
+    };
+
+    setStoredData('salonpulse_queue', {
+      queueId: 3,
+      appointmentId: 3,
+      tokenNumber: fallbackToken,
+      customerId: bookingData.customerId,
+      customerName: activeName,
+      customerPhone: activePhone,
+      serviceName: bookingData.serviceName || 'Classic Fade Haircut',
+      service: bookingData.serviceName || 'Classic Fade Haircut',
+      durationMinutes: 30,
+      staffName: bookingData.staffName || 'Alex Rivera',
+      position: 3,
+      peopleAhead: 2,
+      estimatedWaitMinutes: 35,
+      status: 'WAITING',
+      joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+
+    return fallbackResult;
   },
 
   // Cancel Appointment
@@ -477,17 +614,211 @@ export const customerService = {
     }
   },
 
-  // Live Queue Status
+  // Step 3: Live Real-Time Customer Queue Tracking (GET /api/queue/customer/{customerId})
   async getQueueStatus(customerId: number): Promise<CustomerQueueStatus | null> {
+    const storageKey = 'salonpulse_queue';
     if (USE_MOCK) {
-      return getStoredData<CustomerQueueStatus | null>('salonpulse_queue', initialMockQueue);
+      return getStoredData<CustomerQueueStatus | null>(storageKey, initialMockQueue);
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/queue/customer/${customerId}`);
-      if (!res.ok) throw new Error('Failed to fetch queue status');
-      return res.json();
-    } catch {
-      return getStoredData<CustomerQueueStatus | null>('salonpulse_queue', initialMockQueue);
+      const res = await fetch(`${API_BASE_URL}/queue/customer/${customerId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.queueId || data.tokenNumber || data.appointmentId)) {
+          const mapped: CustomerQueueStatus = {
+            queueId: data.queueId || data.appointmentId || 3,
+            appointmentId: data.appointmentId || data.queueId || 3,
+            tokenNumber: data.tokenNumber || 'T-003',
+            customerId: data.customerId || customerId,
+            customerName: data.customerName || 'Customer',
+            customerPhone: data.customerPhone || '',
+            serviceName: data.serviceName || data.service || 'Classic Fade Haircut',
+            service: data.service || data.serviceName || 'Classic Fade Haircut',
+            durationMinutes: data.durationMinutes || 30,
+            staffName: data.staffName || 'Alex Rivera',
+            position: typeof data.position === 'number' ? data.position : 3,
+            peopleAhead: typeof data.peopleAhead === 'number' ? data.peopleAhead : Math.max(0, (data.position ?? 3) - 1),
+            estimatedWaitMinutes: typeof data.estimatedWaitMinutes === 'number' ? data.estimatedWaitMinutes : 35,
+            status: data.status || 'WAITING',
+            joinedAt: data.joinedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setStoredData(storageKey, mapped);
+          return mapped;
+        }
+      }
+    } catch (err: any) {
+      // Network unreachable, keep last stored queue status
     }
+    return getStoredData<CustomerQueueStatus | null>(storageKey, initialMockQueue);
+  },
+
+  // Real-Time Salons (GET /api/salons)
+  async getSalons(): Promise<SalonLocation[]> {
+    if (USE_MOCK) {
+      return getStoredData<SalonLocation[]>('salonpulse_real_salons', mockNearbySalons);
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/salons`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((item: any, idx: number) => mapBackendSalonToLocation(item, idx));
+          setStoredData('salonpulse_real_salons', mapped);
+          return mapped;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[customerService] Real-time /api/salons unreachable, falling back to cached/mock data:', err.message);
+    }
+    return getStoredData<SalonLocation[]>('salonpulse_real_salons', mockNearbySalons);
+  },
+
+  // Fetch Single Salon (GET /api/salons/{id})
+  async getSalonById(id: number): Promise<SalonLocation> {
+    const all = await this.getSalons();
+    const found = all.find((s) => s.id === id);
+    if (found) return found;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/salons/${id}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return mapBackendSalonToLocation(data, 0);
+      }
+    } catch (err: any) {
+      console.warn(`[customerService] /api/salons/${id} unreachable:`, err.message);
+    }
+    return mockNearbySalons[0];
+  },
+
+  // Real-Time Haircut Styles (GET /api/haircut-styles?salonId={id})
+  async getHaircutStyles(salonId: number): Promise<HaircutStyle[]> {
+    const storageKey = `salonpulse_haircuts_${salonId}`;
+    if (USE_MOCK) {
+      return getStoredData<HaircutStyle[]>(storageKey, mockHaircutStyles);
+    }
+
+    try {
+      // 1. Primary endpoint: /api/haircut-styles?salonId={salonId}
+      let res = await fetch(`${API_BASE_URL}/haircut-styles?salonId=${salonId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+
+      // 2. Fallback alias: /api/haircut-styles/salon/{salonId}
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/haircut-styles/salon/${salonId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
+
+      // 3. Fallback alias: /api/services?salonId={salonId}
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/services?salonId=${salonId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: HaircutStyle[] = data.map((item: any, idx: number) => {
+            const dur = item.durationMinutes ?? item.duration ?? 30;
+            const rawGender = String(item.gender || 'UNISEX').toUpperCase();
+            const genderVal = rawGender === 'MALE' || rawGender === 'MEN'
+              ? 'MALE'
+              : rawGender === 'FEMALE' || rawGender === 'WOMEN'
+              ? 'FEMALE'
+              : 'UNISEX';
+
+            const defaultImg = genderVal === 'FEMALE'
+              ? 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=500'
+              : 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500';
+
+            return {
+              id: item.id || idx + 1,
+              salonId: item.salonId || salonId,
+              name: item.name,
+              gender: genderVal,
+              price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 350,
+              durationMinutes: dur,
+              duration: dur,
+              description: item.description || 'Clean styling and precision cut.',
+              imageUrl: item.imageUrl || defaultImg,
+              cat: item.cat || (genderVal === 'MALE' ? 'Men' : genderVal === 'FEMALE' ? 'Women' : 'Unisex')
+            };
+          });
+          setStoredData(storageKey, mapped);
+          return mapped;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[customerService] Real-time /api/haircut-styles?salonId=${salonId} failed, using local/cached fallback:`, err.message);
+    }
+
+    return getStoredData<HaircutStyle[]>(storageKey, mockHaircutStyles);
   }
 };
+
+export function mapBackendSalonToLocation(raw: any, index: number = 0): SalonLocation {
+  const iconTypes: ('scissors' | 'sparkles' | 'crown')[] = ['scissors', 'sparkles', 'crown'];
+  const iconType = raw.salonType === 'FEMALE'
+    ? 'sparkles'
+    : raw.salonType === 'MALE'
+    ? 'crown'
+    : iconTypes[index % 3];
+
+  const fullAddress = [raw.address, raw.city, raw.state, raw.pincode].filter(Boolean).join(', ');
+
+  return {
+    id: raw.id || index + 1,
+    name: raw.name,
+    distance: raw.distance || `${(0.6 + (index % 5) * 0.4).toFixed(1)} km away`,
+    rating: raw.rating || 4.9,
+    reviews: raw.reviews || (180 + index * 45),
+    address: fullAddress || raw.address,
+    city: raw.city,
+    state: raw.state,
+    phone: raw.phone,
+    email: raw.email,
+    operatingTimings: raw.operatingTimings || '09:00 AM - 09:00 PM',
+    salonType: raw.salonType || 'UNISEX',
+    pincode: raw.pincode ? String(raw.pincode).trim() : (raw.address?.match(/\b([1-9][0-9]{5})\b/)?.[1] || undefined),
+    status: raw.status || 'ACTIVE',
+    chairsAvailable: raw.chairsAvailable || (raw.staffCount ? Math.max(1, Math.floor(raw.staffCount / 2)) : 3),
+    estWait: raw.estWait || `~${15 + (index % 4) * 5} mins`,
+    iconType: iconType,
+    badge: raw.status === 'ACTIVE' ? (index === 0 ? 'Nearest • Verified Partner' : 'Verified Partner') : raw.status,
+    services: raw.services && raw.services.length > 0 ? raw.services : [
+      { id: 101, name: 'Signature Precision Haircut & Styling', price: 350, duration: 30, cat: 'Haircut' },
+      { id: 102, name: 'Fade & Textured Crop Style', price: 300, duration: 25, cat: 'Haircut' },
+      { id: 103, name: 'Classic Executive Scissor Haircut', price: 400, duration: 35, cat: 'Haircut' },
+      { id: 104, name: 'Haircut + Beard Sculpting Combo', price: 500, duration: 45, cat: 'Combo' },
+      { id: 105, name: 'Beard Trim & Hot Towel Shave', price: 200, duration: 20, cat: 'Beard' },
+      { id: 106, name: 'Luxury Scalp Detox & Head Spa', price: 650, duration: 40, cat: 'Spa' }
+    ],
+    stylists: raw.stylists && raw.stylists.length > 0 ? raw.stylists : [
+      { id: 2, name: 'Alex Rivera', role: 'Senior Barber & Fade Master', rating: 4.9 },
+      { id: 1, name: 'Raj Malhotra', role: 'Master Stylist', rating: 4.9 },
+      { id: 3, name: 'Amit Verma', role: 'Senior Barber', rating: 4.8 },
+      { id: 4, name: 'Priya Kapoor', role: 'Hair Specialist', rating: 4.9 }
+    ]
+  };
+}

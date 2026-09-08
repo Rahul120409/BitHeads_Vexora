@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { Scissors, CalendarCheck, Clock, Heart } from 'lucide-react';
 
 export default function QuickActions() {
   const actions = [
-    { label: 'Book Service', icon: '✂️', href: '/customer/book', primary: true },
-    { label: 'My Appointments', icon: '📅', href: '/customer/appointments' },
-    { label: 'Live Queue', icon: '🎫', href: '/customer/queue' },
-    { label: 'Favorite Stylists', icon: '❤️', href: '#stylists' },
+    { label: 'Book Service', icon: Scissors, href: '/customer/book', primary: true },
+    { label: 'My Appointments', icon: CalendarCheck, href: '/customer/appointments' },
+    { label: 'Live Queue', icon: Clock, href: '/customer/queue' },
+    { label: 'Favorite Stylists', icon: Heart, href: '#stylists' },
   ];
 
   return (
@@ -17,20 +18,27 @@ export default function QuickActions() {
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        {actions.map((act) => (
-          <Link
-            key={act.label}
-            href={act.href}
-            className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition-all text-center ${
-              act.primary
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-slate-950 hover:scale-[1.02]'
-                : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800/60'
-            }`}
-          >
-            <span className="text-base">{act.icon}</span>
-            <span>{act.label}</span>
-          </Link>
-        ))}
+        {actions.map((act) => {
+          const IconComp = act.icon;
+          return (
+            <Link
+              key={act.label}
+              href={act.href}
+              className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all text-center group ${
+                act.primary
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-slate-950 hover:scale-[1.02]'
+                  : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800/60'
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
+                act.primary ? 'bg-amber-500/20 text-amber-400 group-hover:text-slate-950' : 'bg-slate-800/80 text-slate-300'
+              }`}>
+                <IconComp className="w-4 h-4 stroke-[2.2]" />
+              </div>
+              <span>{act.label}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

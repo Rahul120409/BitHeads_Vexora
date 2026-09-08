@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ThemeProvider, useTheme } from '../../../components/customer/ThemeContext';
 import Navbar from '../../../components/customer/Navbar';
+import MobileNavigation from '../../../components/customer/MobileNavigation';
 import { customerService } from '../../../services/customerService';
 import { CustomerAppointment } from '../../../mock/customerMock';
 
@@ -58,24 +59,24 @@ function AppointmentsContent() {
     {
       id: 3,
       title: 'Luxe Gel Manicure & Warm Almond Hand Mask',
-      artisan: 'Sophie Chen',
-      artisanRole: 'Master Nail Artisan',
-      rating: 4.9,
-      date: 'Jun 14, 2024',
+      artisan: 'Elena Vance',
+      artisanRole: 'Nail Couturier',
+      rating: 4.8,
+      date: 'Jul 19, 2024',
       time: '16:00 – 17:00',
       duration: '60 mins',
-      price: 75,
+      price: 95,
       status: 'Completed',
-      notes: 'Includes paraffin thermal restoration wrap with shade Nude Voile No. 04.'
+      notes: 'Organic milk bath soak with custom chrome powder top coat finish.'
     },
     {
       id: 4,
-      title: 'Full Highlights & Organic Silk Press',
-      artisan: 'Elena Vance',
-      artisanRole: 'Master Hair Colorist',
-      rating: 4.8,
-      date: 'Apr 29, 2024',
-      time: '10:00 – 12:30',
+      title: 'Balayage Glow Hair Painting & Glossing Glaze',
+      artisan: 'Raj Malhotra',
+      artisanRole: 'Master Colorist',
+      rating: 4.95,
+      date: 'Jun 11, 2024',
+      time: '13:00 – 15:30',
       duration: '150 mins',
       price: 220,
       status: 'Completed',
@@ -85,7 +86,7 @@ function AppointmentsContent() {
 
   return (
     <div
-      className={`min-h-screen transition-colors font-sans ${
+      className={`min-h-screen transition-colors font-sans pb-16 md:pb-0 ${
         isLight ? 'bg-[#fff8f4] text-[#1e1b18]' : 'bg-[#0B0F17] text-slate-100'
       }`}
     >
@@ -220,8 +221,8 @@ function AppointmentsContent() {
 
                   <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-amber-500">Live Token #3</span>
-                      <span className="opacity-60">• Estimated Wait: ~20 mins</span>
+                      <span className="font-bold text-amber-500">Live Token {apt.tokenNumber || 'T-003'}</span>
+                      <span className="opacity-60">• Estimated Wait: ~{apt.estimatedWaitMinutes || 35} mins</span>
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -231,7 +232,7 @@ function AppointmentsContent() {
                           isLight ? 'bg-[#6f331d] text-white' : 'bg-amber-500 text-slate-950'
                         }`}
                       >
-                        Track Live Queue →
+                        Track Live Queue ({apt.tokenNumber || 'T-003'}) →
                       </Link>
 
                       <button
@@ -331,6 +332,7 @@ function AppointmentsContent() {
         )}
 
       </main>
+      <MobileNavigation />
     </div>
   );
 }

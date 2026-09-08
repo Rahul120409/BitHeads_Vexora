@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Scissors, Home, CalendarCheck, Clock, User, LogOut } from 'lucide-react';
 import { CustomerUser, CustomerQueueStatus } from '../../mock/customerMock';
 import { customerService } from '../../services/customerService';
 
@@ -37,10 +38,10 @@ export default function CustomerNavbar({ user, queue }: NavbarProps) {
   };
 
   const navLinks = [
-    { name: 'Overview', href: '/customer' },
-    { name: 'Book Service', href: '/customer/book' },
-    { name: 'Live Queue', href: '/customer/queue' },
-    { name: 'Appointments', href: '/customer/appointments' },
+    { name: 'Overview', href: '/customer', icon: Home },
+    { name: 'Book Service', href: '/customer/book', icon: Scissors },
+    { name: 'Live Queue', href: '/customer/queue', icon: Clock },
+    { name: 'Appointments', href: '/customer/appointments', icon: CalendarCheck },
   ];
 
   return (
@@ -49,8 +50,8 @@ export default function CustomerNavbar({ user, queue }: NavbarProps) {
         {/* Brand & Tagline */}
         <div className="flex items-center gap-8">
           <Link href="/customer" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-base shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-              ✂
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
+              <Scissors className="w-4 h-4 stroke-[2.4]" />
             </div>
             <div>
               <span className="text-base font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-amber-400 bg-clip-text text-transparent">
@@ -66,17 +67,19 @@ export default function CustomerNavbar({ user, queue }: NavbarProps) {
           <nav className="hidden md:flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80 text-xs font-semibold">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
+              const IconComp = link.icon;
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3.5 py-1.5 rounded-lg transition-all ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 shadow-sm font-bold'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
-                  {link.name}
+                  <IconComp className="w-3.5 h-3.5 stroke-[2.2]" />
+                  <span>{link.name}</span>
                 </Link>
               );
             })}
@@ -101,23 +104,32 @@ export default function CustomerNavbar({ user, queue }: NavbarProps) {
 
           <div className="h-6 w-px bg-slate-800 hidden sm:block"></div>
 
-          {/* User Profile Pill */}
+          {/* User Profile Pill with Professional Avatar */}
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm">
-              {initials}
-            </div>
-            <div className="hidden sm:block text-left">
-              <div className="text-xs font-bold text-slate-200 leading-tight">
-                {displayName}
+            <Link
+              href="/customer/profile"
+              className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+            >
+              <div className="relative">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm">
+                  {initials || <User className="w-4 h-4 stroke-[2.4]" />}
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
               </div>
-              <div className="text-[10px] text-slate-500">{activeUser?.role || 'Customer'}</div>
-            </div>
+              <div className="hidden sm:block text-left">
+                <div className="text-xs font-bold text-slate-200 leading-tight">
+                  {displayName}
+                </div>
+                <div className="text-[10px] text-slate-500">{activeUser?.role || 'Customer'}</div>
+              </div>
+            </Link>
             <button
               onClick={handleLogout}
-              className="ml-1 text-slate-400 hover:text-rose-400 text-xs font-medium px-2 py-1 rounded hover:bg-slate-900 transition-colors"
+              className="ml-1 text-slate-400 hover:text-rose-400 text-xs font-medium px-2 py-1 rounded hover:bg-slate-900 transition-colors flex items-center gap-1"
               title="Sign Out"
             >
-              Sign out
+              <LogOut className="w-3.5 h-3.5 stroke-[2]" />
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>
