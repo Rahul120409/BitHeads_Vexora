@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -24,6 +24,7 @@ import {
 import { useTheme } from './ThemeContext';
 import { customerService } from '../../services/customerService';
 import { locationService } from '../../services/locationService';
+import { CustomerUser } from '../../mock/customerMock';
 
 interface NavbarProps {
   userLocation?: string;
@@ -35,7 +36,7 @@ interface NavbarProps {
 export default function Navbar({
   userLocation = 'Downtown, Metro Area',
   onChangeLocation,
-  userName = 'Rahul Sharma',
+  userName,
   userRole = 'Privilège Member'
 }: NavbarProps) {
   const pathname = usePathname();
@@ -46,6 +47,14 @@ export default function Navbar({
   const [isDetectingGps, setIsDetectingGps] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [customLocInput, setCustomLocInput] = useState('');
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(null);
+
+  useEffect(() => {
+    const u = customerService.getCurrentUser();
+    setCurrentUser(u);
+  }, []);
+
+  const activeUserName = userName || currentUser?.name || 'Customer';
 
   const handleLogout = () => {
     customerService.logout();
@@ -238,7 +247,7 @@ export default function Navbar({
                 </div>
                 <div className="py-1">
                   <div className="font-bold text-xs">Live Queue Status</div>
-                  <p className="text-[11px] opacity-80 mt-0.5">You are #3 in queue for Signature Haircut at Downtown Studio.</p>
+                  <p className="text-[11px] opacity-80 mt-0.5">Welcome, {activeUserName}! You are currently connected.</p>
                 </div>
               </div>
             )}
@@ -254,21 +263,28 @@ export default function Navbar({
             }`}
           >
             <div className="relative">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 ${
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 font-bold text-xs ${
                 isLight
                   ? 'bg-gradient-to-tr from-[#6f331d] to-[#8c4a32] text-white ring-2 ring-[#8c4a32]/20'
                   : 'bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-400 text-slate-950 ring-2 ring-amber-400/20'
               }`}>
-                <User className="w-4 h-4 stroke-[2.4]" />
+                {activeUserName
+                  ? activeUserName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()
+                  : <User className="w-4 h-4 stroke-[2.4]" />}
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0B0F17]" />
             </div>
-            <div className="hidden sm:block text-left">
-              <div className="font-bold text-xs leading-tight group-hover:text-[#6f331d] dark:group-hover:text-amber-400 transition-colors">
-                {userName}
+            <div className="hidden sm:block text-left text-xs">
+              <div className="font-bold leading-tight group-hover:text-[#6f331d] dark:group-hover:text-amber-400 transition-colors">
+                {activeUserName}
               </div>
-              <div className={`text-[9px] uppercase tracking-wider font-semibold ${
-                isLight ? 'text-[#8c4a32]' : 'text-amber-400/90'
+              <div className={`text-[10px] uppercase tracking-wider font-semibold ${
+                isLight ? 'text-[#8c4a32]' : 'text-amber-400'
               }`}>
                 {userRole}
               </div>

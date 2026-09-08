@@ -3,34 +3,41 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { customerService } from '../../services/customerService';
-import { CustomerUser } from '../../mock/customerMock';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      setErrorMessage('❌ Password and Confirm Password do not match. Please verify both fields.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage('');
 
     try {
-      await new Promise((r) => setTimeout(r, 400));
-      const newUser: CustomerUser = {
-        id: Date.now(),
-        name: name || 'New Customer',
+      await customerService.register({
+        name,
         email,
-        phone: phone || '+91 99999 88888',
-        role: 'CUSTOMER'
-      };
-      customerService.setCurrentUser(newUser);
+        mobileNumber: phone,
+        password,
+        confirmPassword,
+        role: 'CUSTOMER',
+        userType: 'CUSTOMER'
+      });
+
+      // Direct navigation to customer home page upon successful registration & login
       window.location.href = '/customer';
     } catch (err: any) {
-      setErrorMessage(err.message || 'Registration failed');
+      setErrorMessage(err.message || '❌ Registration failed. Please check your details.');
       setIsLoading(false);
     }
   };
@@ -54,7 +61,7 @@ export default function RegisterPage() {
           </div>
         </Link>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          Create Your Account
+          Create Your Customer Account
         </h2>
         <p className="mt-2 text-sm text-slate-400">
           Already registered?{' '}
@@ -67,8 +74,9 @@ export default function RegisterPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
         <div className="bg-slate-900/90 border border-slate-800/90 py-8 px-6 sm:px-8 shadow-2xl rounded-2xl backdrop-blur-md">
           {errorMessage && (
-            <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-              {errorMessage}
+            <div className="mb-4 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+              <span>⚠️</span>
+              <span>{errorMessage}</span>
             </div>
           )}
 
@@ -83,7 +91,7 @@ export default function RegisterPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
-                placeholder="e.g. Rahul Sharma"
+                placeholder="e.g. Karan Malhotra"
               />
             </div>
 
@@ -97,13 +105,13 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
-                placeholder="rahul@example.com"
+                placeholder="karan@example.com"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Phone Number
+                Mobile No (Phone Number)
               </label>
               <input
                 type="tel"
@@ -111,7 +119,7 @@ export default function RegisterPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
-                placeholder="+91 98765 43210"
+                placeholder="9876543210"
               />
             </div>
 
@@ -129,9 +137,40 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`w-full px-3.5 py-2.5 bg-slate-950/70 border rounded-xl text-white text-sm focus:outline-none transition-colors ${
+                  confirmPassword.length > 0
+                    ? confirmPassword === password
+                      ? 'border-emerald-500/80 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400'
+                      : 'border-rose-500/80 focus:border-rose-400 focus:ring-1 focus:ring-rose-400'
+                    : 'border-slate-800 focus:border-amber-400 focus:ring-1 focus:ring-amber-400'
+                }`}
+                placeholder="••••••••"
+              />
+              {confirmPassword.length > 0 && (
+                confirmPassword === password ? (
+                  <span className="text-[11px] text-emerald-400 font-semibold mt-1 block">
+                    ✓ Passwords match successfully!
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-rose-400 font-semibold mt-1 block">
+                    ❌ Confirm Password does not match Password
+                  </span>
+                )
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || (confirmPassword.length > 0 && password !== confirmPassword)}
               className="w-full py-3 px-4 mt-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
@@ -140,10 +179,10 @@ export default function RegisterPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                   </svg>
-                  <span>Creating Account...</span>
+                  <span>Creating Account & Authenticating...</span>
                 </>
               ) : (
-                <span>Register & Open Home Screen →</span>
+                <span>Register & Open Home Page →</span>
               )}
             </button>
           </form>

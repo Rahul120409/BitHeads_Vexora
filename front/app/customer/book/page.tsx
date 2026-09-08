@@ -49,8 +49,8 @@ function BookingContent() {
   const [selectedStylist, setSelectedStylist] = useState<string>('Raj Malhotra');
 
   // Step 3: Customer Details
-  const [customerName, setCustomerName] = useState<string>('Rahul Sharma');
-  const [customerPhone, setCustomerPhone] = useState<string>('+91 98765 43210');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerNotes, setCustomerNotes] = useState<string>('');
 
   // Step 4: Payment state

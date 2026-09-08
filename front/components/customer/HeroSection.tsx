@@ -1,13 +1,24 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { customerService } from '../../services/customerService';
+import { CustomerUser } from '../../mock/customerMock';
 
 interface HeroSectionProps {
   userName?: string;
 }
 
-export default function HeroSection({ userName = 'Rahul' }: HeroSectionProps) {
-  const firstName = userName ? userName.split(' ')[0] : 'Rahul';
+export default function HeroSection({ userName }: HeroSectionProps) {
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(null);
+
+  useEffect(() => {
+    const u = customerService.getCurrentUser();
+    setCurrentUser(u);
+  }, []);
+
+  const activeName = userName || currentUser?.name || 'Customer';
+  const firstName = activeName.split(' ')[0];
 
   return (
     <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#121826] via-[#0e1420] to-[#0B0F17] border border-slate-800/90 p-8 sm:p-10 shadow-2xl">
@@ -21,15 +32,15 @@ export default function HeroSection({ userName = 'Rahul' }: HeroSectionProps) {
         <div className="lg:col-span-7 space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            <span>SalonPulse • Downtown Studio</span>
+            <span>SalonPulse • Live Operations</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            Good morning, {firstName} 👋
+            Welcome, {firstName} 👋
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed">
-            Book your next look, manage your appointments, and skip the waiting with SalonPulse.
+            Book your next look, manage your appointments, and skip the waiting line with real-time queue tracking.
           </p>
 
           <div className="pt-3 flex flex-wrap items-center gap-3">
@@ -41,10 +52,10 @@ export default function HeroSection({ userName = 'Rahul' }: HeroSectionProps) {
             </Link>
 
             <Link
-              href="#services"
+              href="#salons"
               className="px-6 py-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-sm font-semibold transition-all hover:border-slate-600"
             >
-              <span>Explore Services</span>
+              <span>Explore Salons</span>
             </Link>
           </div>
 
@@ -89,10 +100,10 @@ export default function HeroSection({ userName = 'Rahul' }: HeroSectionProps) {
 
             <div className="relative z-10">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Premium Grooming Chair
+                SalonPulse Digital Booking
               </span>
               <p className="text-[11px] text-amber-400 font-medium mt-0.5">
-                Master Barbers • Hygiene First • Zero Wait
+                Master Barbers • Live Operations • Zero Wait
               </p>
             </div>
           </div>
@@ -102,4 +113,3 @@ export default function HeroSection({ userName = 'Rahul' }: HeroSectionProps) {
     </div>
   );
 }
-
