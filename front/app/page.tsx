@@ -1,10 +1,13 @@
+'use client';
+
 import Link from "next/link";
 import { Sparkles, ShieldCheck, Users, Calendar, ArrowRight, Activity, CheckCircle2 } from "lucide-react";
+import PlainCustomerHomePage from "@/app/customer/page";
 
-export default function Home() {
+export function PortalSelectionHome() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-      
+
       {/* Top Header */}
       <header className="w-full border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md px-6 py-4 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -37,7 +40,7 @@ export default function Home() {
 
       {/* Main Hero & Portal Options */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col items-center justify-center space-y-12">
-        
+
         {/* Hero Section */}
         <div className="text-center space-y-4 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider">
@@ -53,7 +56,7 @@ export default function Home() {
 
         {/* Portal Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-          
+
           {/* Admin Portal Card */}
           <Link
             href="/admin"
@@ -154,4 +157,8 @@ export default function Home() {
 
     </div>
   );
+}
+
+export default function RootHomePage() {
+  return <PlainCustomerHomePage />;
 }
