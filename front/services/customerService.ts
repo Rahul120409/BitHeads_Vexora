@@ -18,7 +18,11 @@ import {
 } from '../mock/customerMock';
 
 // Default port 8085 as per backend specs (loaded from .env if present)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://192.168.137.94:8085/api';
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/api` : '') ||
+  'http://localhost:8085/api'
+).replace(/\/+$/, '');
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
 // Helper for local storage persistence
@@ -359,7 +363,7 @@ export const customerService = {
     }
   },
 
-  // Step 1: Live Queue & Next Available Token (GET /api/queue/next-available)
+  // Step 1: Live Queue & Next Available Token (GET /api/queue/summary)
   async getNextAvailableQueue(salonId?: number): Promise<NextAvailableQueueInfo> {
     const storageKey = salonId ? `salonpulse_live_queue_${salonId}` : 'salonpulse_live_queue';
     if (USE_MOCK) {
@@ -368,11 +372,19 @@ export const customerService = {
 
     try {
       const query = salonId ? `?salonId=${salonId}` : '';
-      let res = await fetch(`${API_BASE_URL}/queue/next-available${query}`, {
+      let res = await fetch(`${API_BASE_URL}/queue/summary${query}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store'
       });
+
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/queue/next-available${query}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
 
       if (!res.ok) {
         res = await fetch(`${API_BASE_URL}/queue/ongoing${query}`, {
@@ -385,12 +397,50 @@ export const customerService = {
       if (res.ok) {
         const data = await res.json();
         if (data && (data.nextAvailableToken || data.ongoingToken)) {
-          setStoredData(storageKey, data);
-          return data;
+          // Normalize and sanitize queue tokens to ensure strictly increasing sequential order
+          const extractNum = (str?: string | null) => {
+            if (!str) return 0;
+            const match = String(str).match(/\d+/);
+            return match ? parseInt(match[0], 10) : 0;
+          };
+
+          let maxFloorToken = 0;
+          const ongoingNum = extractNum(data.ongoingToken);
+          if (ongoingNum > maxFloorToken) maxFloorToken = ongoingNum;
+
+          // Normalize waiting queue so tokens are strictly sequential
+          if (Array.isArray(data.waitingQueue)) {
+            data.waitingQueue = data.waitingQueue.map((item: any) => {
+              let itemToken = extractNum(item.tokenNumber || item.appointmentId);
+              if (itemToken <= maxFloorToken) {
+                itemToken = maxFloorToken + 1;
+              }
+              maxFloorToken = itemToken;
+              return {
+                ...item,
+                tokenNumber: String(itemToken)
+              };
+            });
+          }
+
+          // Compute true next available token
+          let nextAvailableNum = extractNum(data.nextAvailableToken);
+          if (nextAvailableNum <= maxFloorToken) {
+            nextAvailableNum = maxFloorToken + 1;
+          }
+
+          const sanitizedData = {
+            ...data,
+            nextAvailableToken: String(nextAvailableNum),
+            nextQueuePosition: (data.waitingQueue?.length || 0) + 1
+          };
+
+          setStoredData(storageKey, sanitizedData);
+          return sanitizedData;
         }
       }
     } catch (err: any) {
-      console.warn('[customerService] Real-time /api/queue/next-available unreachable, using local fallback:', err.message);
+      console.warn('[customerService] Real-time /api/queue/summary unreachable, using local fallback:', err.message);
     }
 
     return getStoredData<NextAvailableQueueInfo>(storageKey, defaultMockQueueInfo);
@@ -748,9 +798,7 @@ export const customerService = {
               ? 'FEMALE'
               : 'UNISEX';
 
-            const defaultImg = genderVal === 'FEMALE'
-              ? 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=500'
-              : 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500';
+            const defaultImg = getRealHaircutImage(item.name, genderVal, item.imageUrl);
 
             return {
               id: item.id || idx + 1,
@@ -760,8 +808,8 @@ export const customerService = {
               price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 350,
               durationMinutes: dur,
               duration: dur,
-              description: item.description || 'Clean styling and precision cut.',
-              imageUrl: item.imageUrl || defaultImg,
+              description: item.description || 'Clean styling, personalized consultation & precision cut.',
+              imageUrl: defaultImg,
               cat: item.cat || (genderVal === 'MALE' ? 'Men' : genderVal === 'FEMALE' ? 'Women' : 'Unisex')
             };
           });
@@ -774,8 +822,131 @@ export const customerService = {
     }
 
     return getStoredData<HaircutStyle[]>(storageKey, mockHaircutStyles);
+  },
+
+  // Real-Time Staff / Stylists from Backend (GET /api/staff?salonId={id} or /api/staff)
+  async getStylistsForSalon(salonId: number): Promise<any[]> {
+    const storageKey = `salonpulse_stylists_${salonId}`;
+    try {
+      let res = await fetch(`${API_BASE_URL}/staff?salonId=${salonId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/staff/salon/${salonId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/staff`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((st: any, idx: number) => {
+            const name = st.stylistName || st.name || `Stylist ${idx + 1}`;
+            const nameLower = name.toLowerCase();
+            const isFemale = nameLower.includes('priya') || nameLower.includes('sneha') || nameLower.includes('sophie') || nameLower.includes('camille');
+
+            const avatar = isFemale
+              ? 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400'
+              : idx % 2 === 0
+              ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400'
+              : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400';
+
+            // Real signature hairstyle mapping
+            let sigName = 'Classic Fade & Taper';
+            let sigImg = 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600';
+            let sigTag = 'Fade Specialist';
+            let specs = ['Skin Fade', 'Beard Trim', 'Taper'];
+
+            const specLower = (st.specialization || '').toLowerCase();
+            if (isFemale || specLower.includes('color') || specLower.includes('facial')) {
+              sigName = 'Luxe Layer Cut & Blowout';
+              sigImg = 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600';
+              sigTag = 'Color & Layers';
+              specs = ['Layered Cut', 'Balayage', 'Blowout'];
+            } else if (specLower.includes('beard') || nameLower.includes('alex')) {
+              sigName = 'Classic Fade & Beard Trim';
+              sigImg = 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600';
+              sigTag = 'Fade Master';
+              specs = ['Skin Fade', 'Beard Trim', 'Hot Towel'];
+            } else if (nameLower.includes('test')) {
+              sigName = 'Taper Fade & Textured Crop';
+              sigImg = 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600';
+              sigTag = 'Modern Crop';
+              specs = ['Textured Crop', 'Low Taper', 'Razor Line'];
+            } else {
+              sigName = 'Executive Scissor & Flow';
+              sigImg = 'https://images.unsplash.com/photo-1517832606589-7629c3395907?w=600';
+              sigTag = 'Scissor Craft';
+              specs = ['Scissor Cut', 'Classic Flow', 'Taper'];
+            }
+
+            return {
+              id: st.id || idx + 1,
+              name: name,
+              role: st.specialization || (isFemale ? 'Hair & Color Specialist' : 'Senior Barber & Stylist'),
+              rating: Number((4.8 + ((idx % 3) * 0.1)).toFixed(1)),
+              experience: `${6 + ((idx * 2) % 6)} yrs exp`,
+              avatar: avatar,
+              dutyStatus: st.dutyStatus || st.status || 'AVAILABLE',
+              signatureStyle: {
+                name: sigName,
+                image: sigImg,
+                tag: sigTag
+              },
+              specialties: specs
+            };
+          });
+
+          setStoredData(storageKey, mapped);
+          return mapped;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[customerService] Real-time /api/staff failed, using fallback:`, err.message);
+    }
+
+    return getStoredData<any[]>(storageKey, mockNearbySalons[0].stylists);
   }
 };
+
+function getRealHaircutImage(name: string, gender: string, existingImg?: string): string {
+  if (existingImg && existingImg.trim().length > 0 && existingImg.startsWith('http')) {
+    return existingImg;
+  }
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('fade') || lower.includes('tapper') || lower.includes('taper')) {
+    return 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600';
+  }
+  if (lower.includes('layer') || lower.includes('butterfly') || lower.includes('bob')) {
+    return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600';
+  }
+  if (lower.includes('beard') || lower.includes('shave') || lower.includes('trim')) {
+    return 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600';
+  }
+  if (lower.includes('color') || lower.includes('highlight') || lower.includes('dye')) {
+    return 'https://images.unsplash.com/photo-1560869713-7d0a29430803?w=600';
+  }
+  if (lower.includes('facial') || lower.includes('spa') || lower.includes('detox')) {
+    return 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600';
+  }
+  if (lower.includes('crop') || lower.includes('buzz')) {
+    return 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600';
+  }
+  return gender === 'FEMALE'
+    ? 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=600'
+    : 'https://images.unsplash.com/photo-1517832606589-7629c3395907?w=600';
+}
 
 export function mapBackendSalonToLocation(raw: any, index: number = 0): SalonLocation {
   const iconTypes: ('scissors' | 'sparkles' | 'crown')[] = ['scissors', 'sparkles', 'crown'];
@@ -815,10 +986,62 @@ export function mapBackendSalonToLocation(raw: any, index: number = 0): SalonLoc
       { id: 106, name: 'Luxury Scalp Detox & Head Spa', price: 650, duration: 40, cat: 'Spa' }
     ],
     stylists: raw.stylists && raw.stylists.length > 0 ? raw.stylists : [
-      { id: 2, name: 'Alex Rivera', role: 'Senior Barber & Fade Master', rating: 4.9 },
-      { id: 1, name: 'Raj Malhotra', role: 'Master Stylist', rating: 4.9 },
-      { id: 3, name: 'Amit Verma', role: 'Senior Barber', rating: 4.8 },
-      { id: 4, name: 'Priya Kapoor', role: 'Hair Specialist', rating: 4.9 }
+      {
+        id: 2,
+        name: 'Alex Rivera',
+        role: 'Senior Barber & Fade Master',
+        rating: 4.9,
+        experience: '8 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+        signatureStyle: {
+          name: 'Classic Fade & Skin Taper',
+          image: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500',
+          tag: 'Fade Specialist'
+        },
+        specialties: ['Skin Fade', 'Beard Trim', 'Taper']
+      },
+      {
+        id: 1,
+        name: 'Raj Malhotra',
+        role: 'Master Stylist & Scissor Craft',
+        rating: 4.9,
+        experience: '10 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+        signatureStyle: {
+          name: 'Executive Scissor Cut & Flow',
+          image: 'https://images.unsplash.com/photo-1517832606589-7629c3395907?w=500',
+          tag: 'Scissor Master'
+        },
+        specialties: ['Classic Scissor', 'Executive Flow', 'Taper']
+      },
+      {
+        id: 3,
+        name: 'Amit Verma',
+        role: 'Senior Barber & Modern Fades',
+        rating: 4.8,
+        experience: '6 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+        signatureStyle: {
+          name: 'Textured Crop & Low Fade',
+          image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=500',
+          tag: 'Modern Crop'
+        },
+        specialties: ['Low Taper', 'French Crop', 'Razor Lines']
+      },
+      {
+        id: 4,
+        name: 'Priya Kapoor',
+        role: 'Hair Specialist & Luxe Colorist',
+        rating: 4.9,
+        experience: '7 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400',
+        signatureStyle: {
+          name: 'Luxe Butterfly Layers & Blowout',
+          image: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?w=500',
+          tag: 'Luxe Layers'
+        },
+        specialties: ['Layered Cut', 'Balayage', 'Blowout']
+      }
     ]
   };
 }

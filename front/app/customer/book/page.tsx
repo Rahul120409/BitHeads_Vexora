@@ -32,7 +32,15 @@ import {
   ShieldCheck,
   Radio,
   ArrowRight,
-  Check
+  Check,
+  User,
+  Phone,
+  FileText,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  MapPin,
+  Lock
 } from 'lucide-react';
 
 function BookingContent() {
@@ -113,16 +121,25 @@ function BookingContent() {
     }
   };
 
-  // Step 1: Live Queue & Next Available Token (GET /api/queue/next-available)
-  const loadLiveQueue = async (salonId?: number) => {
-    setIsLoadingQueue(true);
+  const formatTokenDisplay = (token?: string | null) => {
+    if (!token || token === 'None' || String(token).toLowerCase().includes('none')) return 'None';
+    const digits = String(token).match(/\d+/);
+    if (digits) {
+      return `#${parseInt(digits[0], 10)}`;
+    }
+    return String(token);
+  };
+
+  // Step 1: Live Queue & Next Available Token (GET /api/queue/summary)
+  const loadLiveQueue = async (salonId?: number, silent: boolean = false) => {
+    if (!silent) setIsLoadingQueue(true);
     try {
       const data = await customerService.getNextAvailableQueue(salonId || salon.id);
       setQueueInfo(data);
     } catch {
       setQueueInfo(defaultMockQueueInfo);
     } finally {
-      setIsLoadingQueue(false);
+      if (!silent) setIsLoadingQueue(false);
     }
   };
 
@@ -139,8 +156,8 @@ function BookingContent() {
     // Trigger real-time haircut styles fetch
     fetchHaircutsForSalon(parsedId);
 
-    // Trigger real-time queue status & next available token fetch
-    loadLiveQueue(parsedId);
+    // Trigger initial queue status fetch
+    loadLiveQueue(parsedId, false);
 
     customerService.getSalonById(parsedId).then((foundSalon) => {
       setSalon(foundSalon);
@@ -155,14 +172,30 @@ function BookingContent() {
       }
     });
 
+    // Fetch real-time stylists directly from backend /api/staff
+    customerService.getStylistsForSalon(parsedId).then((realStylists) => {
+      if (realStylists && realStylists.length > 0) {
+        setSalon((prev) => ({
+          ...prev,
+          stylists: realStylists
+        }));
+        setSelectedStylist((curr) => {
+          if (realStylists.some((st: any) => st.name === curr)) return curr;
+          return realStylists[0].name;
+        });
+      }
+    }).catch((err) => {
+      console.warn('Real-time /api/staff fetch error:', err);
+    });
+
     if (catParam) {
       setCategoryFilter(catParam);
     }
 
-    // Auto-poll live queue status every 10 seconds
+    // Silent background auto-poll every 3 seconds (real-time synchronization with salon panel)
     const queueInterval = setInterval(() => {
-      loadLiveQueue(parsedId);
-    }, 10000);
+      loadLiveQueue(parsedId, true);
+    }, 3000);
 
     return () => clearInterval(queueInterval);
   }, [salonIdParam, serviceIdParam, catParam]);
@@ -212,8 +245,8 @@ function BookingContent() {
 
     const generatedTxn = 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase();
     const chosenToken = timingMode === 'current_token'
-      ? (queueInfo?.nextAvailableToken || 'T-003')
-      : scheduledToken;
+      ? formatTokenDisplay(queueInfo?.nextAvailableToken)
+      : (scheduledToken.startsWith('#') ? scheduledToken : `#${scheduledToken}`);
     const tokenType = timingMode === 'current_token' ? 'Live Queue Token' : 'Advance Scheduled Slot';
 
     const matchedStylist = salon.stylists.find((s) => s.name === selectedStylist);
@@ -235,7 +268,7 @@ function BookingContent() {
 
     setConfirmationData({
       txnId: generatedTxn,
-      token: bookedTicket.tokenNumber || chosenToken,
+      token: formatTokenDisplay(bookedTicket.tokenNumber || chosenToken),
       queuePosition: bookedTicket.queuePosition || (queueInfo?.nextQueuePosition ?? 3),
       estimatedWaitMinutes: bookedTicket.estimatedWaitMinutes || (queueInfo?.estimatedWaitMinutesForNext ?? 35),
       tokenType,
@@ -279,9 +312,9 @@ function BookingContent() {
             <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight flex items-center gap-3">
               <span>{salon.name}</span>
               <span
-                className={`text-xs px-2.5 py-1 rounded-full font-sans font-medium border ${
+                className={`text-xs px-3 py-1 rounded-full font-sans font-semibold border ${
                   isLight
-                    ? 'bg-[#f4ece7] border-[#d9c2ba] text-[#6f331d]'
+                    ? 'bg-[#faf6f3] border-[#e9e1dc] text-[#6f331d]'
                     : 'bg-slate-900 border-slate-800 text-amber-400'
                 }`}
               >
@@ -289,42 +322,66 @@ function BookingContent() {
               </span>
             </h1>
             <p className="text-xs opacity-75 mt-1 flex items-center gap-2">
-              <span>📍 {salon.address}</span>
+              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-amber-500" /> {salon.address}</span>
               <span>•</span>
-              <span className="text-emerald-500 font-semibold font-sans">
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold font-sans">
                 ● {salon.chairsAvailable} Chairs Active Now
               </span>
             </p>
           </div>
 
-          {/* Stepper Indicator Pills */}
-          <div className="flex items-center gap-2 text-xs">
+          {/* Stepper Indicator with Connected Progress */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {[
               { num: 1, label: 'Haircut' },
               { num: 2, label: 'Timing & Token' },
               { num: 3, label: 'Details' },
               { num: 4, label: 'Payment' }
-            ].map((st) => (
-              <div
-                key={st.num}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-all ${
-                  step === st.num
-                    ? isLight
-                      ? 'bg-[#6f331d] text-white shadow-sm'
-                      : 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : step > st.num
-                    ? isLight
-                      ? 'bg-[#e9e1dc] text-[#6f331d]'
-                      : 'bg-slate-800 text-slate-300'
-                    : isLight
-                    ? 'bg-[#f4ece7] text-[#85736d]'
-                    : 'bg-slate-900 text-slate-500'
-                }`}
-              >
-                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold">
-                  {step > st.num ? '✓' : st.num}
-                </span>
-                <span className="hidden md:inline">{st.label}</span>
+            ].map((st, idx, arr) => (
+              <div key={st.num} className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  onClick={() => {
+                    if (step > st.num) setStep(st.num as any);
+                  }}
+                  disabled={step < st.num}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    step === st.num
+                      ? isLight
+                        ? 'bg-[#6f331d] text-white shadow-md ring-2 ring-[#6f331d]/20'
+                        : 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                      : step > st.num
+                      ? isLight
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-pointer hover:bg-emerald-100'
+                        : 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/60 cursor-pointer'
+                      : isLight
+                      ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed'
+                      : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-mono font-bold ${
+                      step > st.num
+                        ? 'bg-emerald-500 text-white'
+                        : step === st.num
+                        ? 'bg-white/20'
+                        : 'bg-stone-200 dark:bg-slate-800'
+                    }`}
+                  >
+                    {step > st.num ? '✓' : st.num}
+                  </span>
+                  <span className="hidden sm:inline">{st.label}</span>
+                </button>
+                {idx < arr.length - 1 && (
+                  <div
+                    className={`w-2.5 sm:w-4 h-0.5 rounded-full transition-all ${
+                      step > st.num
+                        ? 'bg-emerald-500'
+                        : isLight
+                        ? 'bg-stone-200'
+                        : 'bg-slate-800'
+                    }`}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -334,14 +391,14 @@ function BookingContent() {
         {confirmationData ? (
           <div
             className={`rounded-3xl p-8 sm:p-10 border shadow-2xl text-center max-w-2xl mx-auto ${
-              isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+              isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
             }`}
           >
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center text-3xl mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-3xl mx-auto mb-4">
               ✓
             </div>
             <span
-              className={`text-xs uppercase tracking-widest font-bold px-3 py-1 rounded-full ${
+              className={`text-xs uppercase tracking-widest font-extrabold px-3.5 py-1.5 rounded-full ${
                 isLight ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-950/60 text-emerald-400'
               }`}
             >
@@ -359,7 +416,7 @@ function BookingContent() {
             <div
               className={`my-8 p-6 rounded-2xl border ${
                 isLight
-                  ? 'bg-[#fff8f4] border-[#d9c2ba]'
+                  ? 'bg-[#faf6f3] border-[#e9e1dc] shadow-sm'
                   : 'bg-[#0B0F17] border-amber-500/40 shadow-lg shadow-amber-500/5'
               }`}
             >
@@ -367,7 +424,7 @@ function BookingContent() {
                 {confirmationData.tokenType}
               </div>
               <div
-                className={`text-5xl font-black font-serif my-2 tracking-tight ${
+                className={`text-5xl sm:text-6xl font-black font-mono my-2 tracking-tight whitespace-nowrap ${
                   isLight ? 'text-[#6f331d]' : 'text-amber-400'
                 }`}
               >
@@ -376,10 +433,10 @@ function BookingContent() {
 
               {/* Queue Position & Estimated Wait Badge */}
               <div className="flex flex-wrap items-center justify-center gap-2.5 my-3">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                   Queue Position: #{confirmationData.queuePosition || 3}
                 </span>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                   Est. Wait: ~{confirmationData.estimatedWaitMinutes || 35} mins
                 </span>
               </div>
@@ -400,9 +457,9 @@ function BookingContent() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/customer"
-                className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs border transition-all ${
+                className={`w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-xs border transition-all ${
                   isLight
-                    ? 'border-[#d9c2ba] hover:bg-[#f4ece7] text-[#1e1b18]'
+                    ? 'border-[#e9e1dc] hover:bg-[#faf6f3] text-[#1e1b18]'
                     : 'border-slate-800 hover:bg-slate-800 text-slate-200'
                 }`}
               >
@@ -410,7 +467,7 @@ function BookingContent() {
               </Link>
               <Link
                 href="/customer/appointments"
-                className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs text-white transition-all shadow-md ${
+                className={`w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-xs text-white transition-all shadow-md ${
                   isLight
                     ? 'bg-[#6f331d] hover:bg-[#5a2816]'
                     : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
@@ -430,8 +487,8 @@ function BookingContent() {
               {/* STEP 1: SELECT TYPE OF HAIRCUT / SERVICE (REAL-TIME BACKEND INTEGRATED) */}
               {step === 1 && (
                 <div
-                  className={`rounded-3xl p-6 sm:p-8 border shadow-lg ${
-                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+                  className={`rounded-3xl p-6 sm:p-8 border shadow-sm ${
+                    isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
                   {/* Step Header with Real-Time API Status */}
@@ -439,7 +496,7 @@ function BookingContent() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/25 shadow-sm">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-sm">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                             {isLiveConnected ? 'Live Salon Catalog' : 'Real-Time Haircut Menu'}
                           </span>
@@ -457,14 +514,14 @@ function BookingContent() {
                       <button
                         onClick={() => fetchHaircutsForSalon(salon.id)}
                         disabled={isLoadingHaircuts}
-                        className={`self-start sm:self-center px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        className={`self-start sm:self-center px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                           isLight
-                            ? 'border-[#d9c2ba] hover:bg-[#f4ece7] text-[#6f331d]'
+                            ? 'border-[#e9e1dc] hover:bg-[#faf6f3] text-[#6f331d]'
                             : 'border-slate-700 hover:bg-slate-800 text-amber-400'
                         } ${isLoadingHaircuts ? 'opacity-50 cursor-not-allowed' : ''}`}
                         title="Sync real-time haircut catalog from backend server"
                       >
-                        <span className={isLoadingHaircuts ? 'animate-spin' : ''}>🔄</span>
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHaircuts ? 'animate-spin' : ''}`} />
                         <span>{isLoadingHaircuts ? 'Syncing...' : 'Refresh Live Styles'}</span>
                       </button>
                     </div>
@@ -474,21 +531,21 @@ function BookingContent() {
                       <span className="text-xs font-bold opacity-60 mr-1">Filter Gender:</span>
                       {[
                         { id: 'ALL', label: 'All Styles' },
-                        { id: 'MALE', label: '👨 Men (MALE)' },
-                        { id: 'FEMALE', label: '👩 Women (FEMALE)' },
+                        { id: 'MALE', label: '👨 Men' },
+                        { id: 'FEMALE', label: '👩 Women' },
                         { id: 'UNISEX', label: '✨ Unisex' }
                       ].map((tab) => (
                         <button
                           key={tab.id}
                           onClick={() => setGenderFilter(tab.id as any)}
-                          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${
+                          className={`text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                             genderFilter === tab.id
                               ? isLight
-                                ? 'bg-[#6f331d] text-white shadow-sm'
+                                ? 'bg-[#6f331d] text-white shadow-sm ring-2 ring-[#6f331d]/20'
                                 : 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
                               : isLight
-                              ? 'bg-[#f4ece7] text-[#53433e] hover:bg-[#e9e1dc]'
-                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                              ? 'bg-[#faf6f3] text-stone-700 hover:bg-stone-200/70 border border-[#e9e1dc]'
+                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
                           }`}
                         >
                           {tab.label}
@@ -503,13 +560,13 @@ function BookingContent() {
                         <button
                           key={cat}
                           onClick={() => setCategoryFilter(cat)}
-                          className={`text-xs px-3 py-1 rounded-lg font-medium transition-all shrink-0 ${
+                          className={`text-xs px-3 py-1 rounded-lg font-medium transition-all shrink-0 cursor-pointer ${
                             categoryFilter === cat
                               ? isLight
-                                ? 'bg-[#8c4a32] text-white'
+                                ? 'bg-[#6f331d] text-white font-bold shadow-sm'
                                 : 'bg-amber-400/20 border border-amber-400/40 text-amber-300 font-bold'
                               : isLight
-                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              ? 'bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200/60'
                               : 'bg-slate-900/60 text-slate-400 hover:bg-slate-800'
                           }`}
                         >
@@ -553,9 +610,9 @@ function BookingContent() {
                           setGenderFilter('ALL');
                           setCategoryFilter('All');
                         }}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                           isLight
-                            ? 'border-[#d9c2ba] text-[#6f331d] hover:bg-[#f4ece7]'
+                            ? 'border-[#e9e1dc] text-[#6f331d] hover:bg-[#faf6f3]'
                             : 'border-slate-700 text-amber-400 hover:bg-slate-800'
                         }`}
                       >
@@ -576,25 +633,25 @@ function BookingContent() {
                             className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group ${
                               isSelected
                                 ? isLight
-                                  ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20 shadow-md'
+                                  ? 'bg-white border-[#6f331d] ring-2 ring-[#6f331d]/15 shadow-md'
                                   : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20 shadow-lg'
                                 : isLight
-                                ? 'border-[#e9e1dc] hover:border-[#d9c2ba] bg-white hover:shadow-sm'
+                                ? 'border-[#e9e1dc] hover:border-[#6f331d]/30 bg-white hover:shadow-sm'
                                 : 'border-slate-800/80 hover:border-slate-700 bg-[#0B0F17]/40 hover:bg-[#121826]/80'
                             }`}
                           >
                             <div className="flex items-start sm:items-center gap-4 w-full sm:w-auto">
                               {/* Selection Indicator Checkbox */}
                               <div
-                                className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 mt-1 sm:mt-0 transition-all ${
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 mt-1 sm:mt-0 transition-all ${
                                   isSelected
                                     ? isLight
                                       ? 'bg-[#6f331d] text-white border-[#6f331d]'
                                       : 'bg-amber-500 text-slate-950 border-amber-500'
-                                    : 'border-slate-400 text-transparent'
+                                    : 'border-stone-300 dark:border-slate-600 text-transparent'
                                 }`}
                               >
-                                ✓
+                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                               </div>
 
                               {/* Haircut Image Thumbnail */}
@@ -617,7 +674,7 @@ function BookingContent() {
                               {/* Haircut Details */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="font-bold text-sm sm:text-base tracking-tight group-hover:text-amber-500 transition-colors">
+                                  <h3 className="font-bold text-sm sm:text-base tracking-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                                     {service.name}
                                   </h3>
                                   
@@ -628,7 +685,7 @@ function BookingContent() {
                                         ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
                                         : sGender === 'MALE'
                                         ? 'bg-sky-500/10 text-sky-500 border-sky-500/20'
-                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                                     }`}
                                   >
                                     {sGender}
@@ -636,8 +693,8 @@ function BookingContent() {
 
                                   {service.cat && service.cat !== sGender && (
                                     <span
-                                      className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                        isLight ? 'bg-[#f4ece7] text-[#6f331d]' : 'bg-slate-800 text-slate-300'
+                                      className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                                        isLight ? 'bg-[#faf6f3] text-[#6f331d] border-[#e9e1dc]' : 'bg-slate-800 text-slate-300 border-slate-700'
                                       }`}
                                     >
                                       {service.cat}
@@ -670,15 +727,17 @@ function BookingContent() {
                               </div>
                               <span className="text-[10px] opacity-60">Inclusive of taxes</span>
                               <span
-                                className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                className={`mt-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
                                   isSelected
                                     ? isLight
-                                      ? 'bg-[#6f331d] text-white'
+                                      ? 'bg-[#6f331d] text-white shadow-sm'
                                       : 'bg-amber-500 text-slate-950 font-black'
-                                    : 'opacity-40'
+                                    : isLight
+                                    ? 'bg-stone-100 text-stone-600 border border-stone-200 group-hover:border-[#6f331d]/30'
+                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
                                 }`}
                               >
-                                {isSelected ? 'Selected ✓' : 'Click to Select'}
+                                {isSelected ? 'Selected ✓' : 'Select Style'}
                               </span>
                             </div>
                           </div>
@@ -692,19 +751,19 @@ function BookingContent() {
                     <div className="text-xs opacity-70">
                       {selectedService ? (
                         <span>
-                          Selected: <strong className="text-amber-500">{selectedService.name}</strong> (₹{selectedService.price})
+                          Selected: <strong className="text-amber-600 dark:text-amber-400 font-bold">{selectedService.name}</strong> • <span className="font-serif font-bold text-stone-900 dark:text-white">₹{selectedService.price}</span>
                         </span>
                       ) : (
-                        <span>Please click a haircut style above to continue</span>
+                        <span>Please select a haircut style above to continue</span>
                       )}
                     </div>
                     <button
                       onClick={() => setStep(2)}
                       disabled={!selectedService}
-                      className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
+                      className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer ${
                         selectedService
                           ? isLight
-                            ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white'
+                            ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white shadow-[#6f331d]/20'
                             : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
                           : 'opacity-40 cursor-not-allowed bg-slate-500 text-white'
                       }`}
@@ -715,384 +774,499 @@ function BookingContent() {
                 </div>
               )}
 
-              {/* STEP 2: TIMING & QUEUE TOKEN (REVAMPED ULTRA-PROPER UI) */}
+              {/* STEP 2: TIMING & QUEUE ACCESS (CLEAN LUXURY REDESIGN) */}
               {step === 2 && (
                 <div
-                  className={`rounded-3xl p-6 sm:p-8 border shadow-xl transition-all ${
-                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+                  className={`rounded-3xl p-6 sm:p-8 border shadow-sm transition-all ${
+                    isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
                   {/* Step Header */}
                   <div className="pb-5 border-b border-inherit mb-6">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
                         <Clock className="w-3.5 h-3.5" />
-                        Step 2 of 4 • Timing & Queue Allocation
+                        Step 2 of 4 • Timing & Live Queue
                       </span>
-                      <span className="text-xs opacity-60 font-medium">
-                        Branch #{salon.id} • {salon.name}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          Live Sync (3s)
+                        </span>
+                        <button
+                          onClick={() => loadLiveQueue(salon.id, false)}
+                          disabled={isLoadingQueue}
+                          className={`text-[11px] font-bold p-1.5 rounded-lg border flex items-center transition-all cursor-pointer ${
+                            isLight
+                              ? 'border-[#e9e1dc] bg-white text-[#6f331d] hover:bg-[#faf6f3]'
+                              : 'border-slate-700 bg-slate-900 text-amber-400 hover:bg-slate-800'
+                          }`}
+                          title="Refresh live queue status"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingQueue ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
                     </div>
-                    <h2 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
-                      Select Timing & Queue Access
+                    <h2 className="text-xl sm:text-2xl font-serif font-bold tracking-tight">
+                      How would you like to visit {salon.name}?
                     </h2>
-                    <p className="text-xs sm:text-sm opacity-75 mt-1">
-                      Choose an immediate Live Queue Token with real-time floor updates, or pre-book a scheduled appointment slot.
+                    <p className="text-xs opacity-75 mt-0.5">
+                      Join today's live queue with real-time updates, or reserve a scheduled time slot.
                     </p>
                   </div>
 
-                  {/* Mode Selector: 2 Prominent Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    {/* OPTION 1: LIVE QUEUE TOKEN */}
-                    <div
-                      onClick={() => setTimingMode('current_token')}
-                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
-                        timingMode === 'current_token'
-                          ? isLight
-                            ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
-                            : 'bg-gradient-to-br from-slate-900 to-[#161f33] border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/25'
-                          : isLight
-                          ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] opacity-80 hover:opacity-100'
-                          : 'bg-[#0B0F17]/50 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              timingMode === 'current_token'
-                                ? 'bg-amber-500 text-slate-950 font-black'
-                                : isLight
-                                ? 'bg-[#f4ece7] text-[#6f331d]'
-                                : 'bg-slate-800 text-slate-300'
-                            }`}
-                          >
-                            <Zap className="w-5 h-5 fill-current" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-sm sm:text-base">Current Live Token</h3>
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-500 text-white animate-pulse">
-                                LIVE
-                              </span>
-                            </div>
-                            <span className="text-[11px] opacity-70">Immediate walk-in queue for today</span>
-                          </div>
-                        </div>
-
-                        <div
-                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                            timingMode === 'current_token'
-                              ? isLight
-                                ? 'bg-[#6f331d] border-[#6f331d] text-white'
-                                : 'bg-amber-500 border-amber-500 text-slate-950'
-                              : 'border-slate-400 opacity-40'
-                          }`}
-                        >
-                          {timingMode === 'current_token' && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                      </div>
-
-                      <div
-                        className={`pt-3 border-t flex items-center justify-between text-xs font-semibold ${
-                          isLight ? 'border-[#d9c2ba]/60' : 'border-slate-800'
+                  {/* Segmented Mode Selector */}
+                  <div
+                    className={`p-1.5 rounded-2xl border transition-all mb-6 ${
+                      isLight
+                        ? 'bg-stone-100/90 border-stone-200/90 shadow-inner'
+                        : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTimingMode('current_token')}
+                        className={`py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          timingMode === 'current_token'
+                            ? isLight
+                              ? 'bg-white text-[#6f331d] shadow-sm ring-1 ring-stone-900/5'
+                              : 'bg-amber-500 text-slate-950 shadow-md font-black'
+                            : isLight
+                            ? 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                         }`}
                       >
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                          Next Token: {queueInfo?.nextAvailableToken || 'T-003'}
+                        <Zap className="w-4 h-4 fill-current text-amber-500 shrink-0" />
+                        <span className="whitespace-nowrap">Join Live Queue (Walk-In)</span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-white shrink-0 shadow-xs">
+                          LIVE
                         </span>
-                        <span className="opacity-75">~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins wait</span>
-                      </div>
-                    </div>
+                      </button>
 
-                    {/* OPTION 2: ADVANCE APPOINTMENT */}
-                    <div
-                      onClick={() => setTimingMode('advance_slot')}
-                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
-                        timingMode === 'advance_slot'
-                          ? isLight
-                            ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
-                            : 'bg-gradient-to-br from-slate-900 to-[#161f33] border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/25'
-                          : isLight
-                          ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] opacity-80 hover:opacity-100'
-                          : 'bg-[#0B0F17]/50 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              timingMode === 'advance_slot'
-                                ? 'bg-amber-500 text-slate-950 font-black'
-                                : isLight
-                                ? 'bg-[#f4ece7] text-[#6f331d]'
-                                : 'bg-slate-800 text-slate-300'
-                            }`}
-                          >
-                            <Calendar className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-sm sm:text-base">Advance Day & Slot</h3>
-                              <span
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                                  isLight ? 'bg-[#d9c2ba] text-[#53433e]' : 'bg-slate-700 text-slate-300'
-                                }`}
-                              >
-                                SCHEDULED
-                              </span>
-                            </div>
-                            <span className="text-[11px] opacity-70">Book a guaranteed time in advance</span>
-                          </div>
-                        </div>
-
-                        <div
-                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                            timingMode === 'advance_slot'
-                              ? isLight
-                                ? 'bg-[#6f331d] border-[#6f331d] text-white'
-                                : 'bg-amber-500 border-amber-500 text-slate-950'
-                              : 'border-slate-400 opacity-40'
-                          }`}
-                        >
-                          {timingMode === 'advance_slot' && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                      </div>
-
-                      <div
-                        className={`pt-3 border-t flex items-center justify-between text-xs font-semibold ${
-                          isLight ? 'border-[#d9c2ba]/60' : 'border-slate-800'
+                      <button
+                        type="button"
+                        onClick={() => setTimingMode('advance_slot')}
+                        className={`py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          timingMode === 'advance_slot'
+                            ? isLight
+                              ? 'bg-white text-[#6f331d] shadow-sm ring-1 ring-stone-900/5'
+                              : 'bg-amber-500 text-slate-950 shadow-md font-black'
+                            : isLight
+                            ? 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                         }`}
                       >
-                        <span className="opacity-75">Selected: {selectedDate}</span>
-                        <span className="font-bold">{selectedTimeSlot}</span>
-                      </div>
+                        <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className="whitespace-nowrap">Schedule for Later</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 ${
+                            isLight ? 'bg-stone-200/80 text-stone-700' : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          RESERVE
+                        </span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* ========================================================================= */}
-                  {/* SECTION 1: CURRENT LIVE QUEUE TOKEN (REAL-TIME BACKEND INTEGRATED) */}
-                  {/* ========================================================================= */}
+                  {/* OPTION 1: LIVE WALK-IN QUEUE */}
                   {timingMode === 'current_token' && (
-                    <div className="space-y-8">
-                      {/* LUXURY DIGITAL TICKET PASS */}
-                      <div
-                        className={`rounded-3xl border shadow-xl relative overflow-hidden transition-all ${
-                          isLight
-                            ? 'bg-gradient-to-br from-[#fff8f4] via-[#fdf2eb] to-[#f7e6dc] border-[#d9c2ba]'
-                            : 'bg-gradient-to-br from-[#111726] via-[#0E1320] to-[#0A0D15] border-amber-500/40 shadow-amber-500/5'
-                        }`}
-                      >
-                        {/* Ticket Top Ribbon */}
+                    <div className="space-y-5">
+                      {/* 3 Live Key Status Metric Cards (Now Serving, Next Available, Estimated Wait) */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Card 1: Now Serving */}
                         <div
-                          className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                            isLight ? 'border-[#d9c2ba]/60 bg-white/50' : 'border-slate-800 bg-slate-950/40'
+                          className={`p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[165px] ${
+                            isLight
+                              ? 'bg-white border-stone-200/90 shadow-xs'
+                              : 'bg-slate-900 border-slate-800 shadow-xs'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                              Real-Time Live Queue Counter
-                            </span>
-                            <span className="text-xs opacity-50">• Indiranagar Floor</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">
+                              <Scissors className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span>Now Serving (Ongoing)</span>
+                            </div>
+
+                            <div className="flex items-baseline justify-between gap-2 mt-1">
+                              <div className="text-4xl font-mono font-black tracking-tight text-emerald-600 dark:text-emerald-400">
+                                {formatTokenDisplay(queueInfo?.ongoingToken || '6')}
+                              </div>
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 shrink-0">
+                                Chair 1 • Active
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => loadLiveQueue(salon.id)}
-                              disabled={isLoadingQueue}
-                              className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all ${
-                                isLight
-                                  ? 'border-[#d9c2ba] bg-white text-[#6f331d] hover:bg-[#f4ece7]'
-                                  : 'border-slate-700 bg-slate-900 text-amber-400 hover:bg-slate-800'
-                              }`}
-                              title="Refresh real-time queue status from backend"
-                            >
-                              <RefreshCw className={`w-3 h-3 ${isLoadingQueue ? 'animate-spin' : ''}`} />
-                              <span>{isLoadingQueue ? 'Syncing...' : 'Live Sync'}</span>
-                            </button>
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                              ● Floor Active
-                            </span>
+                          <div className="mt-3.5 pt-2.5 border-t border-stone-100 dark:border-slate-800/80">
+                            <div className="text-xs font-bold text-stone-900 dark:text-white truncate">
+                              {queueInfo?.ongoingCustomerName || 'Current Guest'}
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-slate-400 mt-0.5">
+                              <span className="truncate">Stylist: {queueInfo?.ongoingStylistName || 'Alex Rivera'}</span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0 ml-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                In Chair
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Main Ticket Pass Body */}
-                        <div className="p-6 sm:p-8">
-                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-                            {/* Left Column: Huge Token & Metrics (7 Cols) */}
-                            <div className="lg:col-span-7 space-y-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] uppercase tracking-widest font-black text-amber-500 flex items-center gap-1">
-                                  <Ticket className="w-3.5 h-3.5" /> Next Available Token
-                                </span>
-                                <span className="text-xs opacity-40">•</span>
-                                <span className="text-xs font-bold opacity-75">
-                                  Position #{queueInfo?.nextQueuePosition || 3}
-                                </span>
-                              </div>
-
-                              {/* Prominent Glowing Token */}
-                              <div className="flex items-baseline gap-4">
-                                <div
-                                  className={`text-6xl sm:text-7xl font-mono font-black tracking-tight drop-shadow-sm ${
-                                    isLight ? 'text-[#6f331d]' : 'text-amber-400'
-                                  }`}
-                                >
-                                  {queueInfo?.nextAvailableToken || 'T-003'}
-                                </div>
-                                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                                  Ready to Claim
-                                </span>
-                              </div>
-
-                              {/* Metric Badges */}
-                              <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                <div
-                                  className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold ${
-                                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
-                                  }`}
-                                >
-                                  <Clock className="w-4 h-4 text-amber-500" />
-                                  <span>Est. Wait: ~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins</span>
-                                </div>
-                                <div
-                                  className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold ${
-                                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
-                                  }`}
-                                >
-                                  <Users className="w-4 h-4 text-blue-500" />
-                                  <span>{queueInfo?.totalWaiting ?? 2} ahead in line</span>
-                                </div>
-                              </div>
-
-                              <p className="text-xs opacity-75 leading-relaxed pt-1">
-                                💡 Arrive when your turn is called. Live SMS & in-app alerts will notify you as you approach the front of the queue.
-                              </p>
+                        {/* Card 2: Next Available Token (HERO) */}
+                        <div
+                          className={`p-5 rounded-2xl border-2 transition-all flex flex-col justify-between min-h-[165px] relative overflow-hidden ${
+                            isLight
+                              ? 'bg-gradient-to-b from-[#faf6f3] to-white border-amber-500/50 shadow-sm ring-1 ring-amber-500/20'
+                              : 'bg-gradient-to-b from-[#182030] to-slate-900 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-2">
+                              <Ticket className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>Next Available Token</span>
                             </div>
 
-                            {/* Right Column: Live Salon Floor Radar (5 Cols) */}
-                            <div className="lg:col-span-5">
+                            <div className="flex items-baseline justify-between gap-2 mt-1">
                               <div
-                                className={`p-4 sm:p-5 rounded-2xl border ${
-                                  isLight ? 'bg-white/90 border-[#d9c2ba]' : 'bg-slate-950/70 border-slate-800/80'
+                                className={`text-4xl font-mono font-black tracking-tight ${
+                                  isLight ? 'text-[#6f331d]' : 'text-amber-400'
                                 }`}
                               >
-                                <div className="flex items-center justify-between pb-3 border-b border-inherit mb-3">
-                                  <span className="text-[11px] uppercase font-bold tracking-wider opacity-70 flex items-center gap-1.5">
-                                    <Radio className="w-3.5 h-3.5 text-emerald-500" /> Salon Floor Radar
-                                  </span>
-                                  <span className="text-[10px] font-bold opacity-60">2 in Queue</span>
-                                </div>
-
-                                <div className="space-y-2.5 text-xs">
-                                  {/* Currently Serving Item */}
-                                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white font-mono font-bold flex items-center justify-center text-xs shadow-sm">
-                                        {queueInfo?.ongoingToken || 'T-001'}
-                                      </div>
-                                      <div>
-                                        <div className="font-bold text-xs">{queueInfo?.ongoingCustomerName || 'Rahul Sharma'}</div>
-                                        <div className="text-[10px] opacity-70">
-                                          Stylist: {queueInfo?.ongoingStylistName || 'Alex Rivera'}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-white animate-pulse">
-                                      In Chair
-                                    </span>
-                                  </div>
-
-                                  {/* Waiting Queue Item */}
-                                  <div
-                                    className={`p-3 rounded-xl border flex items-center justify-between ${
-                                      isLight ? 'bg-[#f4ece7] border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="w-8 h-8 rounded-lg bg-slate-700 text-slate-200 font-mono font-bold flex items-center justify-center text-xs">
-                                        T-002
-                                      </div>
-                                      <div>
-                                        <div className="font-bold text-xs">Amit Verma</div>
-                                        <div className="text-[10px] opacity-70">Beard Trim • ~15m wait</div>
-                                      </div>
-                                    </div>
-                                    <span className="text-[10px] font-bold opacity-60 uppercase">Waiting</span>
-                                  </div>
-
-                                  {/* Next Slot: Customer's Pass */}
-                                  <div className="p-2.5 rounded-xl border-2 border-dashed border-amber-500/50 bg-amber-500/5 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-amber-500 font-bold">★ Your Next Token</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-amber-500 text-xs">
-                                      {queueInfo?.nextAvailableToken || 'T-003'}
-                                    </span>
-                                  </div>
-                                </div>
+                                {formatTokenDisplay(queueInfo?.nextAvailableToken || '11')}
                               </div>
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500 text-slate-950 shadow-xs shrink-0">
+                                ★ Your Pass
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-3.5 pt-2.5 border-t border-amber-200/60 dark:border-amber-500/20">
+                            <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-200">
+                              <span>Position #{queueInfo?.nextQueuePosition || 5} in queue</span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0 ml-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Live Sync
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-amber-800/80 dark:text-amber-400/80 truncate mt-0.5">
+                              Sequential floor counter
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card 3: Estimated Wait Time */}
+                        <div
+                          className={`p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[165px] ${
+                            isLight
+                              ? 'bg-white border-stone-200/90 shadow-xs'
+                              : 'bg-slate-900 border-slate-800 shadow-xs'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-slate-300 mb-2">
+                              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span>Estimated Wait Time</span>
+                            </div>
+
+                            <div className="flex items-baseline justify-between gap-2 mt-1">
+                              <div className="text-4xl font-mono font-bold tracking-tight text-stone-900 dark:text-white flex items-baseline gap-1">
+                                <span>~{queueInfo?.estimatedWaitMinutesForNext ?? 25}</span>
+                                <span className="text-sm font-sans font-semibold text-stone-400 dark:text-slate-400">mins</span>
+                              </div>
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase shrink-0 border ${
+                                  isLight
+                                    ? 'bg-stone-100 text-stone-600 border-stone-200/80'
+                                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                                }`}
+                              >
+                                Real-Time
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-3.5 pt-2.5 border-t border-stone-100 dark:border-slate-800/80">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-slate-200">
+                              <Users className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                              <span>{queueInfo?.totalWaiting ?? 4} clients ahead of you</span>
+                            </div>
+                            <div className="text-[11px] text-stone-500 dark:text-slate-400 truncate mt-0.5">
+                              Arrive ~5 mins before your turn
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* STYLIST PICKER FOR LIVE QUEUE */}
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="text-xs uppercase font-extrabold tracking-wider opacity-80 flex items-center gap-1.5">
-                            <Scissors className="w-3.5 h-3.5 text-amber-500" /> Choose Your Stylist for This Token
-                          </label>
-                          <span className="text-[11px] opacity-60">All stylists active on floor</span>
+                      {/* Prominent Callout Banner */}
+                      <div
+                        className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isLight
+                            ? 'bg-amber-50/70 border-amber-200/80 text-[#6f331d]'
+                            : 'bg-amber-950/20 border-amber-800/40 text-amber-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-mono font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                            {formatTokenDisplay(queueInfo?.nextAvailableToken || '7')}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                              <span>Guaranteed Sequential Token</span>
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 normal-case">Shared Floor Counter</span>
+                            </div>
+                            <p className="text-xs text-stone-600 dark:text-slate-300 mt-0.5 leading-snug">
+                              Book now to secure <strong>Token {formatTokenDisplay(queueInfo?.nextAvailableToken || '7')}</strong>. Both salon desk walk-ins and online bookings pull strictly in order.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="sm:self-center shrink-0">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs">
+                            <Check className="w-3 h-3 stroke-[3]" /> No Waiting Outside
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Live Queue Progression Step Visualizer */}
+                      <div
+                        className={`p-4 sm:p-5 rounded-2xl border ${
+                          isLight ? 'bg-white border-stone-200/90 shadow-xs' : 'bg-slate-900 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3 text-[11px] font-bold uppercase tracking-wider">
+                          <span className="flex items-center gap-1.5 text-stone-700 dark:text-slate-300">
+                            <Users className="w-3.5 h-3.5 text-amber-500" />
+                            Live Queue Sequence Tracker
+                          </span>
+                          <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Current: {formatTokenDisplay(queueInfo?.ongoingToken || '3')}
+                          </span>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                          {salon.stylists.map((st) => {
+                        <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1">
+                          {/* Serving */}
+                          <div
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border shrink-0 ${
+                              isLight
+                                ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                                : 'bg-emerald-950/40 border-emerald-800 text-emerald-100'
+                            }`}
+                          >
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-mono font-bold text-xs shadow-2xs">
+                              {formatTokenDisplay(queueInfo?.ongoingToken || '3')}
+                            </span>
+                            <div className="text-left">
+                              <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                                In Chair ({queueInfo?.ongoingCustomerName ? queueInfo.ongoingCustomerName.split(' ')[0] : 'Guest'})
+                              </div>
+                              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400">Now Cutting</div>
+                            </div>
+                          </div>
+
+                          <ChevronRight className="w-4 h-4 text-stone-300 dark:text-slate-600 shrink-0" />
+
+                          {/* Waiting Queue Items or fallback */}
+                          {queueInfo?.waitingQueue && queueInfo.waitingQueue.length > 0 ? (
+                            queueInfo.waitingQueue.slice(0, 6).map((w, i) => (
+                              <div key={w.queueId || i} className="flex items-center gap-2 shrink-0">
+                                <div
+                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border shrink-0 ${
+                                    isLight
+                                      ? 'bg-stone-50 border-stone-200 text-stone-800'
+                                      : 'bg-slate-800/80 border-slate-700 text-slate-200'
+                                  }`}
+                                >
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                                      isLight ? 'bg-stone-200/90 text-stone-800' : 'bg-slate-700 text-slate-200'
+                                    }`}
+                                  >
+                                    {formatTokenDisplay(w.tokenNumber || String(i + 4))}
+                                  </span>
+                                  <div className="text-left">
+                                    <div className="text-xs font-medium text-stone-800 dark:text-slate-200">
+                                      Waiting ({w.customerName ? w.customerName.split(' ')[0] : `Guest ${i + 1}`})
+                                    </div>
+                                    <div className="text-[10px] text-stone-400 dark:text-slate-400">
+                                      ~{w.estimatedWaitMinutes || (i + 1) * 10}m
+                                    </div>
+                                  </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-stone-300 dark:text-slate-600 shrink-0" />
+                              </div>
+                            ))
+                          ) : (
+                            <>
+                              <div
+                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border shrink-0 ${
+                                  isLight
+                                    ? 'bg-stone-50 border-stone-200 text-stone-800'
+                                    : 'bg-slate-800/80 border-slate-700 text-slate-200'
+                                }`}
+                              >
+                                <span
+                                  className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                                    isLight ? 'bg-stone-200/90 text-stone-800' : 'bg-slate-700 text-slate-200'
+                                  }`}
+                                >
+                                  #7
+                                </span>
+                                <div className="text-left">
+                                  <div className="text-xs font-medium text-stone-800 dark:text-slate-200">Waiting (Amit)</div>
+                                  <div className="text-[10px] text-stone-400 dark:text-slate-400">~10m</div>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-stone-300 dark:text-slate-600 shrink-0" />
+                              <div
+                                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border shrink-0 ${
+                                  isLight
+                                    ? 'bg-stone-50 border-stone-200 text-stone-800'
+                                    : 'bg-slate-800/80 border-slate-700 text-slate-200'
+                                }`}
+                              >
+                                <span
+                                  className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                                    isLight ? 'bg-stone-200/90 text-stone-800' : 'bg-slate-700 text-slate-200'
+                                  }`}
+                                >
+                                  #8
+                                </span>
+                                <div className="text-left">
+                                  <div className="text-xs font-medium text-stone-800 dark:text-slate-200">Waiting (Sneha)</div>
+                                  <div className="text-[10px] text-stone-400 dark:text-slate-400">~20m</div>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-stone-300 dark:text-slate-600 shrink-0" />
+                            </>
+                          )}
+
+                          {/* Your Target Pass Token */}
+                          <div
+                            className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border-2 shrink-0 shadow-xs ring-2 ${
+                              isLight
+                                ? 'bg-amber-50 border-amber-500/80 text-amber-950 ring-amber-500/15'
+                                : 'bg-amber-950/40 border-amber-500 text-amber-100 ring-amber-500/20'
+                            }`}
+                          >
+                            <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-mono font-black text-xs shadow-2xs">
+                              ★ {formatTokenDisplay(queueInfo?.nextAvailableToken || '7')}
+                            </span>
+                            <div className="text-left">
+                              <div className="text-xs font-black text-amber-800 dark:text-amber-300">
+                                Your Spot
+                              </div>
+                              <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400">Next Bookable</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stylist Selector for Live Queue */}
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                          <div>
+                            <label className="text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 text-stone-900 dark:text-white">
+                              <Scissors className="w-3.5 h-3.5 text-amber-500" /> Choose Stylist for Your Turn
+                            </label>
+                            <p className="text-[11px] text-stone-500 dark:text-slate-400 mt-0.5">
+                              Select your preferred specialist for your token.
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                            ● {salon.stylists.length} Active
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          {salon.stylists.map((st: any) => {
                             const isStylistSelected = selectedStylist === st.name;
+                            const initials = st.name ? st.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('') : 'ST';
+
                             return (
                               <div
                                 key={st.id}
                                 onClick={() => setSelectedStylist(st.name)}
-                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                className={`group relative rounded-xl border p-3 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                                   isStylistSelected
                                     ? isLight
-                                      ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
-                                      : 'bg-slate-900 border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                                      ? 'bg-[#6f331d]/5 border-[#6f331d] shadow-sm ring-2 ring-[#6f331d]/20 -translate-y-0.5'
+                                      : 'bg-amber-500/10 border-amber-500 shadow-md ring-2 ring-amber-500/25 -translate-y-0.5'
                                     : isLight
-                                    ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
-                                    : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
+                                    ? 'bg-white border-stone-200/90 hover:border-[#6f331d]/40 hover:shadow-xs'
+                                    : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40 hover:bg-slate-900'
                                 }`}
                               >
-                                <div>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div
-                                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                                        isStylistSelected
-                                          ? 'bg-amber-500 text-slate-950'
-                                          : isLight
-                                          ? 'bg-[#f4ece7] text-[#6f331d]'
-                                          : 'bg-slate-800 text-slate-300'
-                                      }`}
-                                    >
-                                      {st.name.split(' ').map((n) => n[0]).join('')}
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="relative shrink-0">
+                                      <div
+                                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs tracking-wider transition-colors ${
+                                          isStylistSelected
+                                            ? isLight
+                                              ? 'bg-[#6f331d] text-white'
+                                              : 'bg-amber-500 text-slate-950 font-black'
+                                            : isLight
+                                            ? 'bg-stone-100 text-stone-700 border border-stone-200 group-hover:bg-amber-50 group-hover:text-amber-900'
+                                            : 'bg-slate-800 text-slate-200 border border-slate-700 group-hover:bg-slate-700'
+                                        }`}
+                                      >
+                                        {initials}
+                                      </div>
+                                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
                                     </div>
-                                    <span className="text-xs font-bold text-amber-500 flex items-center gap-0.5">
-                                      <Star className="w-3 h-3 fill-amber-500" /> {st.rating}
-                                    </span>
+
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white truncate">
+                                        {st.name}
+                                      </div>
+                                      <div className="text-[10px] text-stone-500 dark:text-slate-400 truncate">
+                                        {st.role || 'Hair Stylist'}
+                                      </div>
+                                    </div>
                                   </div>
 
-                                  <div className="font-bold text-sm">{st.name}</div>
-                                  <div className="text-[11px] opacity-60 mt-0.5">{st.role}</div>
+                                  <div className="shrink-0 flex items-center">
+                                    {isStylistSelected ? (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 ${
+                                          isLight ? 'bg-[#6f331d] text-white' : 'bg-amber-500 text-slate-950 font-black'
+                                        }`}
+                                      >
+                                        <Check className="w-3 h-3 stroke-[3]" />
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-0.5 ${
+                                          isLight ? 'bg-stone-100 text-stone-600' : 'bg-slate-800 text-slate-300'
+                                        }`}
+                                      >
+                                        <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" /> {st.rating || 4.9}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
-                                <div className="mt-3 pt-2.5 border-t border-inherit flex items-center justify-between text-[10px]">
-                                  <span className="text-emerald-500 font-bold">● Active Now</span>
-                                  {isStylistSelected && (
-                                    <span className="font-bold text-amber-500 flex items-center gap-0.5">
-                                      <Check className="w-3 h-3" /> Selected
-                                    </span>
-                                  )}
+                                <div className="flex items-center justify-between text-[10px] pt-2 border-t border-stone-100 dark:border-slate-800/80 mt-1">
+                                  <span className="text-stone-500 dark:text-slate-400 font-medium truncate max-w-[110px]">
+                                    {st.specialties?.[0] ? `#${st.specialties[0]}` : (st.experience || 'Master Stylist')}
+                                  </span>
+                                  <span
+                                    className={`font-semibold flex items-center gap-1 text-[10px] ${
+                                      isStylistSelected
+                                        ? isLight
+                                          ? 'text-[#6f331d] font-bold'
+                                          : 'text-amber-400 font-bold'
+                                        : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isStylistSelected ? (isLight ? 'bg-[#6f331d]' : 'bg-amber-400') : 'bg-emerald-500 animate-pulse'}`} />
+                                    {isStylistSelected ? 'Assigned' : 'Active'}
+                                  </span>
                                 </div>
                               </div>
                             );
@@ -1102,9 +1276,7 @@ function BookingContent() {
                     </div>
                   )}
 
-                  {/* ========================================================================= */}
-                  {/* SECTION 2: ADVANCE DAY & TIME SLOT SELECTION */}
-                  {/* ========================================================================= */}
+                  {/* OPTION 2: ADVANCE DAY & TIME SLOT SELECTION */}
                   {timingMode === 'advance_slot' && (
                     <div className="space-y-6">
                       {/* Day Selection */}
@@ -1125,7 +1297,7 @@ function BookingContent() {
                                       ? 'bg-[#6f331d] text-white border-[#6f331d] shadow-md'
                                       : 'bg-amber-500 text-slate-950 font-bold border-amber-500 shadow-md'
                                     : isLight
-                                    ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] text-[#1e1b18]'
+                                    ? 'bg-white border-[#e9e1dc] hover:border-[#6f331d]/30 text-[#1e1b18] shadow-sm'
                                     : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
                                 }`}
                               >
@@ -1155,7 +1327,7 @@ function BookingContent() {
 
                         <div className="space-y-4">
                           {Object.entries(timeSlots).map(([period, slots]) => (
-                            <div key={period} className={`p-4 rounded-2xl border ${isLight ? 'bg-[#fff8f4] border-[#d9c2ba]' : 'bg-slate-900/60 border-slate-800'}`}>
+                            <div key={period} className={`p-4 rounded-2xl border ${isLight ? 'bg-[#faf6f3] border-[#e9e1dc]' : 'bg-slate-900/60 border-slate-800'}`}>
                               <span className="text-[11px] uppercase font-bold opacity-70 tracking-wider block mb-2.5">
                                 {period}
                               </span>
@@ -1172,7 +1344,7 @@ function BookingContent() {
                                             ? 'bg-[#6f331d] text-white border-[#6f331d] shadow-sm'
                                             : 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
                                           : isLight
-                                          ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] text-[#1e1b18]'
+                                          ? 'bg-white border-[#e9e1dc] hover:border-[#6f331d]/30 text-[#1e1b18]'
                                           : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
                                       }`}
                                     >
@@ -1190,15 +1362,15 @@ function BookingContent() {
                       {/* Pre-allocated Advance Token Card */}
                       <div
                         className={`p-5 rounded-2xl border flex items-center justify-between gap-4 ${
-                          isLight ? 'bg-[#fff8f4] border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
+                          isLight ? 'bg-white border-[#e9e1dc] shadow-sm' : 'bg-slate-900 border-slate-800'
                         }`}
                       >
                         <div>
-                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600 dark:text-amber-400">
                             Advance Slot Token Pre-Allocation
                           </span>
                           <div className="text-base font-bold mt-0.5">
-                            Reserved Pass Token: <span className="font-mono text-amber-500">{scheduledToken}</span>
+                            Reserved Pass Token: <span className="font-mono text-amber-600 dark:text-amber-400 font-black">{scheduledToken}</span>
                           </div>
                           <p className="text-xs opacity-75 mt-0.5">
                             Guaranteed priority salon chair window for {selectedDate} at {selectedTimeSlot}.
@@ -1207,7 +1379,7 @@ function BookingContent() {
                         <div
                           className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center font-mono font-black text-xl shadow-sm shrink-0 ${
                             isLight
-                              ? 'bg-white border-[#d9c2ba] text-[#6f331d]'
+                              ? 'bg-[#faf6f3] border-[#e9e1dc] text-[#6f331d]'
                               : 'bg-[#0B0F17] border-amber-500/40 text-amber-400'
                           }`}
                         >
@@ -1215,57 +1387,107 @@ function BookingContent() {
                         </div>
                       </div>
 
-                      {/* Stylist Selection for Advance Slot */}
+                      {/* Stylist Selection */}
                       <div>
-                        <label className="block text-xs uppercase font-extrabold tracking-wider mb-2.5 opacity-80">
-                          3. Select Preferred Stylist
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                          {salon.stylists.map((st) => {
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                          <div>
+                            <label className="text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5 text-stone-900 dark:text-white">
+                              <Scissors className="w-3.5 h-3.5 text-amber-500" /> 3. Select Preferred Stylist
+                            </label>
+                            <p className="text-[11px] text-stone-500 dark:text-slate-400 mt-0.5">
+                              Book in advance with your preferred stylist for your reserved time slot.
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                            ● Guaranteed Slot
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          {salon.stylists.map((st: any) => {
                             const isStylistSelected = selectedStylist === st.name;
+                            const initials = st.name ? st.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('') : 'ST';
+
                             return (
                               <div
                                 key={st.id}
                                 onClick={() => setSelectedStylist(st.name)}
-                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                className={`group relative rounded-xl border p-3 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                                   isStylistSelected
                                     ? isLight
-                                      ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
-                                      : 'bg-slate-900 border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                                      ? 'bg-[#6f331d]/5 border-[#6f331d] shadow-sm ring-2 ring-[#6f331d]/20 -translate-y-0.5'
+                                      : 'bg-amber-500/10 border-amber-500 shadow-md ring-2 ring-amber-500/25 -translate-y-0.5'
                                     : isLight
-                                    ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
-                                    : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
+                                    ? 'bg-white border-stone-200/90 hover:border-[#6f331d]/40 hover:shadow-xs'
+                                    : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40 hover:bg-slate-900'
                                 }`}
                               >
-                                <div>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div
-                                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                                        isStylistSelected
-                                          ? 'bg-amber-500 text-slate-950'
-                                          : isLight
-                                          ? 'bg-[#f4ece7] text-[#6f331d]'
-                                          : 'bg-slate-800 text-slate-300'
-                                      }`}
-                                    >
-                                      {st.name.split(' ').map((n) => n[0]).join('')}
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="relative shrink-0">
+                                      <div
+                                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs tracking-wider transition-colors ${
+                                          isStylistSelected
+                                            ? isLight
+                                              ? 'bg-[#6f331d] text-white'
+                                              : 'bg-amber-500 text-slate-950 font-black'
+                                            : isLight
+                                            ? 'bg-stone-100 text-stone-700 border border-stone-200 group-hover:bg-amber-50 group-hover:text-amber-900'
+                                            : 'bg-slate-800 text-slate-200 border border-slate-700 group-hover:bg-slate-700'
+                                        }`}
+                                      >
+                                        {initials}
+                                      </div>
+                                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
                                     </div>
-                                    <span className="text-xs font-bold text-amber-500 flex items-center gap-0.5">
-                                      <Star className="w-3 h-3 fill-amber-500" /> {st.rating}
-                                    </span>
+
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white truncate">
+                                        {st.name}
+                                      </div>
+                                      <div className="text-[10px] text-stone-500 dark:text-slate-400 truncate">
+                                        {st.role || 'Hair Stylist'}
+                                      </div>
+                                    </div>
                                   </div>
 
-                                  <div className="font-bold text-sm">{st.name}</div>
-                                  <div className="text-[11px] opacity-60 mt-0.5">{st.role}</div>
+                                  <div className="shrink-0 flex items-center">
+                                    {isStylistSelected ? (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 ${
+                                          isLight ? 'bg-[#6f331d] text-white' : 'bg-amber-500 text-slate-950 font-black'
+                                        }`}
+                                      >
+                                        <Check className="w-3 h-3 stroke-[3]" />
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-0.5 ${
+                                          isLight ? 'bg-stone-100 text-stone-600' : 'bg-slate-800 text-slate-300'
+                                        }`}
+                                      >
+                                        <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" /> {st.rating || 4.9}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
-                                <div className="mt-3 pt-2.5 border-t border-inherit flex items-center justify-between text-[10px]">
-                                  <span className="text-emerald-500 font-bold">● Guaranteed Slot</span>
-                                  {isStylistSelected && (
-                                    <span className="font-bold text-amber-500 flex items-center gap-0.5">
-                                      <Check className="w-3 h-3" /> Selected
-                                    </span>
-                                  )}
+                                <div className="flex items-center justify-between text-[10px] pt-2 border-t border-stone-100 dark:border-slate-800/80 mt-1">
+                                  <span className="text-stone-500 dark:text-slate-400 font-medium truncate max-w-[110px]">
+                                    {st.specialties?.[0] ? `#${st.specialties[0]}` : (st.experience || 'Master Stylist')}
+                                  </span>
+                                  <span
+                                    className={`font-semibold flex items-center gap-1 text-[10px] ${
+                                      isStylistSelected
+                                        ? isLight
+                                          ? 'text-[#6f331d] font-bold'
+                                          : 'text-amber-400 font-bold'
+                                        : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isStylistSelected ? (isLight ? 'bg-[#6f331d]' : 'bg-amber-400') : 'bg-emerald-500 animate-pulse'}`} />
+                                    {isStylistSelected ? 'Reserved' : 'Available'}
+                                  </span>
                                 </div>
                               </div>
                             );
@@ -1278,14 +1500,14 @@ function BookingContent() {
                   {/* Step 2 Bottom Actions Bar & Summary */}
                   <div
                     className={`pt-6 mt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
-                      isLight ? 'border-[#d9c2ba]' : 'border-slate-800'
+                      isLight ? 'border-[#e9e1dc]' : 'border-slate-800'
                     }`}
                   >
                     <button
                       onClick={() => setStep(1)}
-                      className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs border transition-all ${
+                      className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
                         isLight
-                          ? 'border-[#d9c2ba] text-[#53433e] hover:bg-[#e9e1dc]'
+                          ? 'border-[#e9e1dc] text-[#53433e] hover:bg-[#faf6f3]'
                           : 'border-slate-800 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
@@ -1295,7 +1517,7 @@ function BookingContent() {
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                       <button
                         onClick={() => setStep(3)}
-                        className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
+                        className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
                           isLight
                             ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white shadow-[#6f331d]/20'
                             : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
@@ -1303,13 +1525,11 @@ function BookingContent() {
                       >
                         {timingMode === 'current_token' ? (
                           <>
-                            <span>Claim & Book Token {queueInfo?.nextAvailableToken || 'T-003'}</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <span>Join Live Queue with Token {formatTokenDisplay(queueInfo?.nextAvailableToken || '7')} →</span>
                           </>
                         ) : (
                           <>
-                            <span>Proceed to Details ({selectedTimeSlot})</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <span>Proceed with Slot ({selectedTimeSlot}) →</span>
                           </>
                         )}
                       </button>
@@ -1321,65 +1541,72 @@ function BookingContent() {
               {/* STEP 3: CUSTOMER DETAILS */}
               {step === 3 && (
                 <div
-                  className={`rounded-3xl p-6 sm:p-8 border shadow-lg ${
-                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+                  className={`rounded-3xl p-6 sm:p-8 border shadow-sm ${
+                    isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
                   <div className="pb-4 border-b border-inherit mb-6">
-                    <h2 className="text-xl font-serif font-bold">Step 3: Confirm Customer Details</h2>
+                    <h2 className="text-xl sm:text-2xl font-serif font-bold tracking-tight">Step 3: Confirm Customer Details</h2>
                     <p className="text-xs opacity-75 mt-0.5">
-                      Enter the recipient name and contact details for live queue alerts and digital receipts.
+                      Enter your contact information for real-time live queue SMS alerts and digital invoice receipts.
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs uppercase font-bold tracking-wider mb-1.5 opacity-80">
-                        Full Name
+                      <label className="block text-xs uppercase font-extrabold tracking-wider mb-2 opacity-80 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-amber-500" /> Full Name
                       </label>
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        className={`w-full px-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all ${
-                          isLight
-                            ? 'bg-white border-[#d9c2ba] focus:border-[#6f331d] text-[#1e1b18]'
-                            : 'bg-slate-900 border-slate-800 focus:border-amber-500 text-slate-100'
-                        }`}
-                        placeholder="Your full name"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          className={`w-full px-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all ${
+                            isLight
+                              ? 'bg-white border-[#e9e1dc] focus:border-[#6f331d] focus:ring-2 focus:ring-[#6f331d]/15 text-[#1e1b18]'
+                              : 'bg-slate-900 border-slate-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-slate-100'
+                          }`}
+                          placeholder="Your full name"
+                        />
+                      </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs uppercase font-bold tracking-wider mb-1.5 opacity-80">
-                        Phone Number (for Live SMS & Queue Token Alerts)
+                      <label className="block text-xs uppercase font-extrabold tracking-wider mb-2 opacity-80 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-amber-500" /> Phone Number (for Live SMS & Queue Token Alerts)
                       </label>
-                      <input
-                        type="text"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        className={`w-full px-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all ${
-                          isLight
-                            ? 'bg-white border-[#d9c2ba] focus:border-[#6f331d] text-[#1e1b18]'
-                            : 'bg-slate-900 border-slate-800 focus:border-amber-500 text-slate-100'
-                        }`}
-                        placeholder="+91 98765 43210"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value)}
+                          className={`w-full px-4 py-3 rounded-xl border text-sm font-medium focus:outline-none transition-all ${
+                            isLight
+                              ? 'bg-white border-[#e9e1dc] focus:border-[#6f331d] focus:ring-2 focus:ring-[#6f331d]/15 text-[#1e1b18]'
+                              : 'bg-slate-900 border-slate-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-slate-100'
+                          }`}
+                          placeholder="+91 98765 43210"
+                        />
+                      </div>
+                      <span className="text-[11px] opacity-60 mt-1 block">
+                        We send SMS notifications when 1-2 customers remain ahead of you in line.
+                      </span>
                     </div>
 
                     <div>
-                      <label className="block text-xs uppercase font-bold tracking-wider mb-1.5 opacity-80">
-                        Styling Instructions or Preferences (Optional)
+                      <label className="block text-xs uppercase font-extrabold tracking-wider mb-2 opacity-80 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-amber-500" /> Styling Instructions or Preferences (Optional)
                       </label>
                       <textarea
                         rows={2}
                         value={customerNotes}
                         onChange={(e) => setCustomerNotes(e.target.value)}
-                        placeholder="e.g. Skin fade with textured top, scissor trim only on sides..."
+                        placeholder="e.g. Skin fade with textured scissor top, beard edging..."
                         className={`w-full px-4 py-2.5 rounded-xl border text-xs font-medium focus:outline-none transition-all ${
                           isLight
-                            ? 'bg-white border-[#d9c2ba] focus:border-[#6f331d] text-[#1e1b18]'
-                            : 'bg-slate-900 border-slate-800 focus:border-amber-500 text-slate-100'
+                            ? 'bg-white border-[#e9e1dc] focus:border-[#6f331d] focus:ring-2 focus:ring-[#6f331d]/15 text-[#1e1b18]'
+                            : 'bg-slate-900 border-slate-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-slate-100'
                         }`}
                       />
                     </div>
@@ -1389,9 +1616,9 @@ function BookingContent() {
                   <div className="pt-6 mt-6 border-t border-inherit flex items-center justify-between">
                     <button
                       onClick={() => setStep(2)}
-                      className={`px-6 py-2.5 rounded-xl font-bold text-xs border transition-all ${
+                      className={`px-6 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
                         isLight
-                          ? 'border-[#d9c2ba] text-[#53433e] hover:bg-[#e9e1dc]'
+                          ? 'border-[#e9e1dc] text-[#53433e] hover:bg-[#faf6f3]'
                           : 'border-slate-800 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
@@ -1399,10 +1626,10 @@ function BookingContent() {
                     </button>
                     <button
                       onClick={() => setStep(4)}
-                      className={`px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
+                      className={`px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer ${
                         isLight
-                          ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white'
-                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                          ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white shadow-[#6f331d]/20'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
                       }`}
                     >
                       Proceed to Payment →
@@ -1414,19 +1641,19 @@ function BookingContent() {
               {/* STEP 4: DUMMY MOCK PAYMENT */}
               {step === 4 && (
                 <div
-                  className={`rounded-3xl p-6 sm:p-8 border shadow-lg ${
-                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+                  className={`rounded-3xl p-6 sm:p-8 border shadow-sm ${
+                    isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
                   <div className="pb-4 border-b border-inherit mb-6">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-serif font-bold">Step 4: Mock Payment & Confirmation</h2>
-                      <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                      <h2 className="text-xl sm:text-2xl font-serif font-bold tracking-tight">Step 4: Mock Payment & Confirmation</h2>
+                      <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                         Demo Sandbox
                       </span>
                     </div>
                     <p className="text-xs opacity-75 mt-0.5">
-                      Select your preferred dummy payment method. No real bank charges will be incurred.
+                      Select your preferred dummy payment method. No real charges will be made.
                     </p>
                   </div>
 
@@ -1436,55 +1663,64 @@ function BookingContent() {
                       {
                         id: 'upi',
                         name: 'Instant UPI / QR Code (Mock)',
-                        desc: 'Pay using Google Pay, PhonePe, or Paytm demo QR',
-                        icon: '📱'
+                        desc: 'Simulated 1-click test UPI gateway (Google Pay, PhonePe, Paytm)',
+                        icon: Smartphone,
+                        iconColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                       },
                       {
                         id: 'card',
                         name: 'Test Credit / Debit Card',
-                        desc: 'Simulated 1-click test card authorization (Visa / MC)',
-                        icon: '💳'
+                        desc: 'Simulated test card authorization (Visa, Mastercard, RuPay)',
+                        icon: CreditCard,
+                        iconColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                       },
                       {
                         id: 'counter',
                         name: 'Pay at Salon Counter',
-                        desc: 'Reserve queue slot now and pay at salon reception upon arrival',
-                        icon: '💵'
+                        desc: 'Reserve queue token now and settle at salon reception upon arrival',
+                        icon: Banknote,
+                        iconColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                       }
-                    ].map((pm) => (
-                      <div
-                        key={pm.id}
-                        onClick={() => setPaymentMethod(pm.id as any)}
-                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-4 ${
-                          paymentMethod === pm.id
-                            ? isLight
-                              ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20 shadow-sm'
-                              : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
-                            : isLight
-                            ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
-                            : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{pm.icon}</span>
-                          <div>
-                            <div className="font-bold text-xs sm:text-sm">{pm.name}</div>
-                            <div className="text-[11px] opacity-70">{pm.desc}</div>
-                          </div>
-                        </div>
+                    ].map((pm) => {
+                      const isSelected = paymentMethod === pm.id;
+                      const IconComp = pm.icon;
+                      return (
                         <div
-                          className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold ${
-                            paymentMethod === pm.id
+                          key={pm.id}
+                          onClick={() => setPaymentMethod(pm.id as any)}
+                          className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-4 ${
+                            isSelected
                               ? isLight
-                                ? 'bg-[#6f331d] text-white border-[#6f331d]'
-                                : 'bg-amber-500 text-slate-950 border-amber-500'
-                              : 'border-slate-400 text-transparent'
+                                ? 'bg-white border-[#6f331d] ring-2 ring-[#6f331d]/15 shadow-md'
+                                : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                              : isLight
+                              ? 'bg-white border-[#e9e1dc] hover:border-[#6f331d]/30 shadow-sm'
+                              : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
                           }`}
                         >
-                          ✓
+                          <div className="flex items-center gap-3.5">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${pm.iconColor}`}>
+                              <IconComp className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-xs sm:text-sm">{pm.name}</div>
+                              <div className="text-[11px] opacity-70">{pm.desc}</div>
+                            </div>
+                          </div>
+                          <div
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs font-bold transition-all shrink-0 ${
+                              isSelected
+                                ? isLight
+                                  ? 'bg-[#6f331d] text-white border-[#6f331d]'
+                                  : 'bg-amber-500 text-slate-950 border-amber-500'
+                                : 'border-stone-300 dark:border-slate-600 text-transparent'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Step 4 Actions */}
@@ -1492,9 +1728,9 @@ function BookingContent() {
                     <button
                       onClick={() => setStep(3)}
                       disabled={isProcessing}
-                      className={`px-6 py-2.5 rounded-xl font-bold text-xs border transition-all ${
+                      className={`px-6 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
                         isLight
-                          ? 'border-[#d9c2ba] text-[#53433e] hover:bg-[#e9e1dc]'
+                          ? 'border-[#e9e1dc] text-[#53433e] hover:bg-[#faf6f3]'
                           : 'border-slate-800 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
@@ -1503,12 +1739,12 @@ function BookingContent() {
                     <button
                       onClick={handleConfirmPayment}
                       disabled={isProcessing}
-                      className={`px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 ${
+                      className={`px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer ${
                         isProcessing
                           ? 'opacity-70 cursor-wait bg-slate-600 text-white'
                           : isLight
-                          ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white'
-                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'
+                          ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white shadow-[#6f331d]/20'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-amber-500/20'
                       }`}
                     >
                       {isProcessing ? (
@@ -1532,7 +1768,7 @@ function BookingContent() {
             <div className="lg:col-span-4">
               <div
                 className={`sticky top-28 rounded-3xl p-6 border shadow-xl ${
-                  isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
+                  isLight ? 'bg-white border-[#e9e1dc]' : 'bg-[#121826] border-slate-800'
                 }`}
               >
                 <div className="flex items-center justify-between pb-3 border-b border-inherit mb-4">
@@ -1540,12 +1776,12 @@ function BookingContent() {
                     Booking Summary
                   </span>
                   <span
-                    className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
+                    className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${
                       timingMode === 'current_token'
-                        ? 'bg-emerald-500/15 text-emerald-500'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                         : isLight
-                        ? 'bg-[#d9c2ba] text-[#6f331d]'
-                        : 'bg-amber-500/15 text-amber-400'
+                        ? 'bg-[#faf6f3] text-[#6f331d] border border-[#e9e1dc]'
+                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                     }`}
                   >
                     {timingMode === 'current_token' ? '⚡ Live Queue' : '📅 Scheduled Slot'}
@@ -1599,12 +1835,12 @@ function BookingContent() {
                     {timingMode === 'current_token' ? (
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-bold text-emerald-500 flex items-center gap-1">
-                            <span>● Live Token {queueInfo?.nextAvailableToken || 'T-003'}</span>
+                          <div className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
+                            <span>● Live Token {formatTokenDisplay(queueInfo?.nextAvailableToken || '7')}</span>
                           </div>
-                          <div className="text-[10px] opacity-70">~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins estimated wait</div>
+                          <div className="text-[10px] opacity-70 font-mono">~{queueInfo?.estimatedWaitMinutesForNext ?? 25} mins estimated wait</div>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
                           Today
                         </span>
                       </div>
@@ -1672,7 +1908,7 @@ function BookingContent() {
                 <div
                   className={`mt-4 p-3 rounded-xl text-[11px] border leading-relaxed ${
                     isLight
-                      ? 'bg-[#f4ece7] border-[#d9c2ba] text-[#53433e]'
+                      ? 'bg-[#faf6f3] border-[#e9e1dc] text-[#6f331d]'
                       : 'bg-slate-900 border-slate-800 text-slate-400'
                   }`}
                 >

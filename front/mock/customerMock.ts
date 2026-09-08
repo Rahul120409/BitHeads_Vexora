@@ -194,21 +194,21 @@ export const mockStaffMembers: StaffMember[] = [
   }
 ];
 
-// Live Queue & Next Available Token state (matching GET /api/queue/next-available)
+// Live Queue & Next Available Token state (matching GET /api/queue/summary)
 export const defaultMockQueueInfo: NextAvailableQueueInfo = {
-  ongoingToken: "T-001",
+  ongoingToken: "3",
   ongoingCustomerName: "Rahul Sharma",
   ongoingStylistName: "Alex Rivera",
   totalServing: 1,
-  totalWaiting: 2,
-  nextAvailableToken: "T-003",
-  nextQueuePosition: 3,
-  estimatedWaitMinutesForNext: 35,
+  totalWaiting: 3,
+  nextAvailableToken: "7",
+  nextQueuePosition: 4,
+  estimatedWaitMinutesForNext: 25,
   currentlyServing: [
     {
       queueId: 1,
       appointmentId: 1,
-      tokenNumber: "T-001",
+      tokenNumber: "3",
       customerName: "Rahul Sharma",
       service: "Classic Fade Haircut",
       staffName: "Alex Rivera",
@@ -219,12 +219,34 @@ export const defaultMockQueueInfo: NextAvailableQueueInfo = {
     {
       queueId: 2,
       appointmentId: 2,
-      tokenNumber: "T-002",
+      tokenNumber: "4",
       customerName: "Amit Verma",
       service: "Beard Trim",
       staffName: "Alex Rivera",
       position: 1,
-      estimatedWaitMinutes: 15,
+      estimatedWaitMinutes: 10,
+      status: "WAITING"
+    },
+    {
+      queueId: 3,
+      appointmentId: 3,
+      tokenNumber: "5",
+      customerName: "Sneha Rao",
+      service: "Hair Styling",
+      staffName: "Priya Patel",
+      position: 2,
+      estimatedWaitMinutes: 18,
+      status: "WAITING"
+    },
+    {
+      queueId: 4,
+      appointmentId: 4,
+      tokenNumber: "6",
+      customerName: "Vikram Malhotra",
+      service: "Classic Fade",
+      staffName: "Raj Kumar",
+      position: 3,
+      estimatedWaitMinutes: 25,
       status: "WAITING"
     }
   ]
@@ -315,7 +337,20 @@ export interface SalonLocation {
   iconType?: 'scissors' | 'sparkles' | 'crown';
   badge?: string;
   services: { id: number; name: string; price: number; duration: number; cat: string }[];
-  stylists: { id: number; name: string; role: string; rating: number }[];
+  stylists: {
+    id: number;
+    name: string;
+    role: string;
+    rating: number;
+    avatar?: string;
+    experience?: string;
+    signatureStyle?: {
+      name: string;
+      image: string;
+      tag: string;
+    };
+    specialties?: string[];
+  }[];
 }
 
 export const mockNearbySalons: SalonLocation[] = [
@@ -345,9 +380,62 @@ export const mockNearbySalons: SalonLocation[] = [
       { id: 106, name: 'Luxury Scalp Detox & Head Spa', price: 650, duration: 40, cat: 'Spa' }
     ],
     stylists: [
-      { id: 1, name: 'Raj Malhotra', role: 'Master Stylist', rating: 4.9 },
-      { id: 2, name: 'Amit Verma', role: 'Senior Barber & Fade Specialist', rating: 4.8 },
-      { id: 3, name: 'Priya Kapoor', role: 'Hair Specialist & Colorist', rating: 4.9 }
+      {
+        id: 2,
+        name: 'Alex Rivera',
+        role: 'Senior Barber & Fade Master',
+        rating: 4.9,
+        experience: '8 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+        signatureStyle: {
+          name: 'Classic Fade & Skin Taper',
+          image: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500',
+          tag: 'Fade Specialist'
+        },
+        specialties: ['Skin Fade', 'Beard Trim', 'Taper']
+      },
+      {
+        id: 1,
+        name: 'Raj Malhotra',
+        role: 'Master Stylist & Scissor Craft',
+        rating: 4.9,
+        experience: '10 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+        signatureStyle: {
+          name: 'Executive Scissor Cut & Flow',
+          image: 'https://images.unsplash.com/photo-1517832606589-7629c3395907?w=500',
+          tag: 'Scissor Master'
+        },
+        specialties: ['Classic Scissor', 'Executive Flow', 'Taper']
+      },
+      {
+        id: 3,
+        name: 'Amit Verma',
+        role: 'Senior Barber & Modern Fades',
+        rating: 4.8,
+        experience: '6 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+        signatureStyle: {
+          name: 'Textured Crop & Low Fade',
+          image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=500',
+          tag: 'Modern Crop'
+        },
+        specialties: ['Low Taper', 'French Crop', 'Razor Lines']
+      },
+      {
+        id: 4,
+        name: 'Priya Kapoor',
+        role: 'Hair Specialist & Luxe Colorist',
+        rating: 4.9,
+        experience: '7 yrs exp',
+        avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400',
+        signatureStyle: {
+          name: 'Luxe Butterfly Layers & Blowout',
+          image: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?w=500',
+          tag: 'Luxe Layers'
+        },
+        specialties: ['Layered Cut', 'Balayage', 'Blowout']
+      }
     ]
   },
   {
