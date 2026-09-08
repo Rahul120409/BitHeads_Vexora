@@ -89,13 +89,13 @@ export default function Navbar({
   ];
 
   const popularLocations = [
-    'Mumbai (Bandra West)',
-    'Mumbai (South Mumbai / Colaba)',
-    'Bengaluru (Indiranagar 100ft Rd)',
-    'Bengaluru (Koramangala 4th Block)',
-    'Delhi NCR (Connaught Place)',
-    'Pune (Koregaon Park)',
-    'Hyderabad (Jubilee Hills)',
+    'Bengaluru (Indiranagar 560001)',
+    'Bengaluru (Koramangala 560034)',
+    'Mumbai (Bandra West 400050)',
+    'Mumbai (South Mumbai / Colaba 400005)',
+    'Delhi NCR (Connaught Place 110001)',
+    'Pune (Koregaon Park 411001)',
+    'Hyderabad (Jubilee Hills 500033)',
   ];
 
   return (
@@ -427,7 +427,7 @@ export default function Navbar({
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
                   <input
                     type="text"
-                    placeholder="Enter city (e.g. Mumbai, Delhi, Pune)..."
+                    placeholder="Enter city or 6-digit pincode (e.g. 560001, Bangalore)..."
                     value={customLocInput}
                     onChange={(e) => setCustomLocInput(e.target.value)}
                     onKeyDown={(e) => {

@@ -10,8 +10,30 @@ import {
   SalonLocation,
   mockNearbySalons,
   CustomerUser,
-  mockCustomer
+  mockCustomer,
+  HaircutStyle,
+  mockHaircutStyles,
+  NextAvailableQueueInfo,
+  defaultMockQueueInfo
 } from '../../../mock/customerMock';
+import {
+  Zap,
+  Calendar,
+  Clock,
+  Users,
+  Ticket,
+  CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  Scissors,
+  Star,
+  Info,
+  ChevronRight,
+  ShieldCheck,
+  Radio,
+  ArrowRight,
+  Check
+} from 'lucide-react';
 
 function BookingContent() {
   const router = useRouter();
@@ -28,17 +50,20 @@ function BookingContent() {
   // Stepper state: 1: Haircut, 2: Timing & Token, 3: Details, 4: Payment
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Step 1: Haircut / Service Selection
+  // Step 1: Real-Time Haircut Styles & Service Selection
+  const [haircutStyles, setHaircutStyles] = useState<HaircutStyle[]>([]);
+  const [isLoadingHaircuts, setIsLoadingHaircuts] = useState<boolean>(true);
+  const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
+  const [genderFilter, setGenderFilter] = useState<'ALL' | 'MALE' | 'FEMALE' | 'UNISEX'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [selectedService, setSelectedService] = useState<any>(null);
 
   // Step 2: Timing & Token Selection (2 Sections: Current Token vs Advance Slot)
   const [timingMode, setTimingMode] = useState<'current_token' | 'advance_slot'>('current_token');
   
-  // Section 1: Current Token state
-  const [liveQueueToken] = useState<number>(3);
-  const [liveQueueServing] = useState<number>(2);
-  const [liveQueueWait] = useState<number>(15);
+  // Section 1: Real-Time Live Queue & Next Available Token state
+  const [queueInfo, setQueueInfo] = useState<NextAvailableQueueInfo | null>(null);
+  const [isLoadingQueue, setIsLoadingQueue] = useState<boolean>(false);
 
   // Section 2: Advance Slot state
   const [selectedDate, setSelectedDate] = useState<string>('Today');
@@ -46,7 +71,7 @@ function BookingContent() {
   const [scheduledToken] = useState<string>('#S-14');
 
   // Common Stylist selection
-  const [selectedStylist, setSelectedStylist] = useState<string>('Raj Malhotra');
+  const [selectedStylist, setSelectedStylist] = useState<string>('Alex Rivera');
 
   // Step 3: Customer Details
   const [customerName, setCustomerName] = useState<string>('');
@@ -58,6 +83,49 @@ function BookingContent() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [confirmationData, setConfirmationData] = useState<any>(null);
 
+  // Fetch real-time haircut styles for salon
+  const fetchHaircutsForSalon = async (salonId: number) => {
+    setIsLoadingHaircuts(true);
+    try {
+      const styles = await customerService.getHaircutStyles(salonId);
+      if (styles && styles.length > 0) {
+        setHaircutStyles(styles);
+        setIsLiveConnected(true);
+        if (serviceIdParam) {
+          const match = styles.find((s) => s.id === parseInt(serviceIdParam, 10));
+          setSelectedService(match || styles[0]);
+        } else {
+          setSelectedService((prev: any) => {
+            if (prev && styles.some((s) => s.id === prev.id)) return prev;
+            return styles[0];
+          });
+        }
+      } else {
+        setHaircutStyles(mockHaircutStyles);
+        setSelectedService(mockHaircutStyles[0]);
+      }
+    } catch (e) {
+      console.warn('Real-time haircut style fetch error, falling back to mock catalog:', e);
+      setHaircutStyles(mockHaircutStyles);
+      setSelectedService(mockHaircutStyles[0]);
+    } finally {
+      setIsLoadingHaircuts(false);
+    }
+  };
+
+  // Step 1: Live Queue & Next Available Token (GET /api/queue/next-available)
+  const loadLiveQueue = async (salonId?: number) => {
+    setIsLoadingQueue(true);
+    try {
+      const data = await customerService.getNextAvailableQueue(salonId || salon.id);
+      setQueueInfo(data);
+    } catch {
+      setQueueInfo(defaultMockQueueInfo);
+    } finally {
+      setIsLoadingQueue(false);
+    }
+  };
+
   useEffect(() => {
     // Load current user
     const user = customerService.getCurrentUser() || mockCustomer;
@@ -65,38 +133,62 @@ function BookingContent() {
     setCustomerName(user.name);
     setCustomerPhone(user.phone);
 
-    // Determine salon
+    // Determine salon (from real-time API or local cache)
     const parsedId = salonIdParam ? parseInt(salonIdParam, 10) : 1;
-    const foundSalon = mockNearbySalons.find((s) => s.id === parsedId) || mockNearbySalons[0];
-    setSalon(foundSalon);
 
-    // Initial service selection
-    if (serviceIdParam) {
-      const srv = foundSalon.services.find((s) => s.id === parseInt(serviceIdParam, 10));
-      if (srv) {
-        setSelectedService(srv);
-      } else {
-        setSelectedService(foundSalon.services[0]);
+    // Trigger real-time haircut styles fetch
+    fetchHaircutsForSalon(parsedId);
+
+    // Trigger real-time queue status & next available token fetch
+    loadLiveQueue(parsedId);
+
+    customerService.getSalonById(parsedId).then((foundSalon) => {
+      setSalon(foundSalon);
+      if (foundSalon.stylists && foundSalon.stylists.length > 0) {
+        setSelectedStylist(foundSalon.stylists[0].name);
       }
-    } else {
-      setSelectedService(foundSalon.services[0]);
-    }
-
-    // Default stylist
-    if (foundSalon.stylists && foundSalon.stylists.length > 0) {
-      setSelectedStylist(foundSalon.stylists[0].name);
-    }
+    }).catch(() => {
+      const foundSalon = mockNearbySalons.find((s) => s.id === parsedId) || mockNearbySalons[0];
+      setSalon(foundSalon);
+      if (foundSalon.stylists && foundSalon.stylists.length > 0) {
+        setSelectedStylist(foundSalon.stylists[0].name);
+      }
+    });
 
     if (catParam) {
       setCategoryFilter(catParam);
     }
+
+    // Auto-poll live queue status every 10 seconds
+    const queueInterval = setInterval(() => {
+      loadLiveQueue(parsedId);
+    }, 10000);
+
+    return () => clearInterval(queueInterval);
   }, [salonIdParam, serviceIdParam, catParam]);
 
-  const categories = ['All', 'Haircut', 'Beard', 'Combo', 'Spa'];
+  const categories = ['All', 'Haircut', 'Fade', 'Beard', 'Combo', 'Spa'];
 
-  const filteredServices = salon.services.filter((s) => {
-    if (categoryFilter === 'All') return true;
-    return s.cat.toLowerCase() === categoryFilter.toLowerCase();
+  const displayHaircuts = haircutStyles.length > 0 ? haircutStyles : (salon.services as any[] || mockHaircutStyles);
+
+  const filteredServices = displayHaircuts.filter((s: any) => {
+    // Gender Filter
+    if (genderFilter !== 'ALL') {
+      const sGender = String(s.gender || 'UNISEX').toUpperCase();
+      if (genderFilter === 'MALE' && sGender !== 'MALE') return false;
+      if (genderFilter === 'FEMALE' && sGender !== 'FEMALE') return false;
+      if (genderFilter === 'UNISEX' && sGender !== 'UNISEX') return false;
+    }
+    // Category Filter
+    if (categoryFilter !== 'All') {
+      const catVal = String(s.cat || s.category || '').toLowerCase();
+      const nameVal = String(s.name || '').toLowerCase();
+      const target = categoryFilter.toLowerCase();
+      if (!catVal.includes(target) && !nameVal.includes(target)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   const availableDates = [
@@ -113,37 +205,49 @@ function BookingContent() {
     Evening: ['05:30 PM', '06:15 PM', '07:30 PM']
   };
 
-  // Process Dummy Mock Payment
+  // Step 2: Customer Picks That Token & Books Appointment (POST /api/appointments)
   const handleConfirmPayment = async () => {
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1300)); // realistic gateway simulation
+    await new Promise((resolve) => setTimeout(resolve, 1100)); // realistic gateway simulation
 
     const generatedTxn = 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-    const assignedTokenNumber = timingMode === 'current_token' ? `#${liveQueueToken}` : scheduledToken;
-    const tokenType = timingMode === 'current_token' ? 'Live Walk-in Queue' : 'Advance Scheduled Slot';
+    const chosenToken = timingMode === 'current_token'
+      ? (queueInfo?.nextAvailableToken || 'T-003')
+      : scheduledToken;
+    const tokenType = timingMode === 'current_token' ? 'Live Queue Token' : 'Advance Scheduled Slot';
 
-    // Save to customerService appointments
-    await customerService.bookAppointment({
+    const matchedStylist = salon.stylists.find((s) => s.name === selectedStylist);
+    const staffId = matchedStylist ? matchedStylist.id : 2;
+
+    // POST /api/appointments
+    const bookedTicket = await customerService.bookAppointment({
       customerId: currentUser.id,
       serviceId: selectedService ? selectedService.id : 1,
-      staffId: 101,
-      appointmentTime: timingMode === 'current_token' ? 'Immediate (Live)' : selectedTimeSlot,
-      appointmentDate: timingMode === 'current_token' ? 'Today' : selectedDate
+      staffId: staffId,
+      appointmentTime: timingMode === 'current_token' ? new Date().toISOString() : `${selectedDate} ${selectedTimeSlot}`,
+      appointmentDate: timingMode === 'current_token' ? 'Today' : selectedDate,
+      salonId: salon.id,
+      selectedToken: chosenToken,
+      serviceName: selectedService ? selectedService.name : 'Classic Fade Haircut',
+      staffName: selectedStylist,
+      price: selectedService ? selectedService.price : 350
     });
 
     setConfirmationData({
       txnId: generatedTxn,
-      token: assignedTokenNumber,
+      token: bookedTicket.tokenNumber || chosenToken,
+      queuePosition: bookedTicket.queuePosition || (queueInfo?.nextQueuePosition ?? 3),
+      estimatedWaitMinutes: bookedTicket.estimatedWaitMinutes || (queueInfo?.estimatedWaitMinutesForNext ?? 35),
       tokenType,
       salonName: salon.name,
       salonAddress: salon.address,
-      serviceName: selectedService ? selectedService.name : 'Signature Haircut',
+      serviceName: selectedService ? selectedService.name : 'Classic Fade Haircut',
       price: selectedService ? selectedService.price : 350,
       stylist: selectedStylist,
       date: timingMode === 'current_token' ? 'Today (Now)' : selectedDate,
-      time: timingMode === 'current_token' ? '~15 mins wait' : selectedTimeSlot,
-      customerName,
-      customerPhone,
+      time: timingMode === 'current_token' ? `~${bookedTicket.estimatedWaitMinutes || 35} mins wait` : selectedTimeSlot,
+      customerName: customerName || currentUser.name,
+      customerPhone: customerPhone || currentUser.phone,
       method: paymentMethod.toUpperCase()
     });
 
@@ -269,6 +373,17 @@ function BookingContent() {
               >
                 {confirmationData.token}
               </div>
+
+              {/* Queue Position & Estimated Wait Badge */}
+              <div className="flex flex-wrap items-center justify-center gap-2.5 my-3">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                  Queue Position: #{confirmationData.queuePosition || 3}
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                  Est. Wait: ~{confirmationData.estimatedWaitMinutes || 35} mins
+                </span>
+              </div>
+
               <div className="text-sm font-semibold">{confirmationData.serviceName}</div>
               <div className="text-xs opacity-75 mt-1">
                 Stylist: <span className="font-bold">{confirmationData.stylist}</span> • Time:{' '}
@@ -312,35 +427,90 @@ function BookingContent() {
             {/* Left Column: Active Step Details (8 Cols) */}
             <div className="lg:col-span-8 space-y-6">
 
-              {/* STEP 1: SELECT TYPE OF HAIRCUT / SERVICE */}
+              {/* STEP 1: SELECT TYPE OF HAIRCUT / SERVICE (REAL-TIME BACKEND INTEGRATED) */}
               {step === 1 && (
                 <div
                   className={`rounded-3xl p-6 sm:p-8 border shadow-lg ${
                     isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-inherit mb-6">
-                    <div>
-                      <h2 className="text-xl font-serif font-bold">Step 1: Select Type of Haircut</h2>
-                      <p className="text-xs opacity-75 mt-0.5">
-                        Choose your desired cut or grooming treatment for today.
-                      </p>
+                  {/* Step Header with Real-Time API Status */}
+                  <div className="flex flex-col gap-3 pb-5 border-b border-inherit mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/25 shadow-sm">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            {isLiveConnected ? 'Live Salon Catalog' : 'Real-Time Haircut Menu'}
+                          </span>
+                          <span className="text-[11px] opacity-60">• Branch #{salon.id}</span>
+                        </div>
+                        <h2 className="text-xl sm:text-2xl font-serif font-bold tracking-tight">
+                          Step 1: Select Type of Haircut
+                        </h2>
+                        <p className="text-xs opacity-75 mt-0.5">
+                          Choose your style from {salon.name}’s live real-time service menu.
+                        </p>
+                      </div>
+
+                      {/* Live Sync / Refresh Action */}
+                      <button
+                        onClick={() => fetchHaircutsForSalon(salon.id)}
+                        disabled={isLoadingHaircuts}
+                        className={`self-start sm:self-center px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          isLight
+                            ? 'border-[#d9c2ba] hover:bg-[#f4ece7] text-[#6f331d]'
+                            : 'border-slate-700 hover:bg-slate-800 text-amber-400'
+                        } ${isLoadingHaircuts ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title="Sync real-time haircut catalog from backend server"
+                      >
+                        <span className={isLoadingHaircuts ? 'animate-spin' : ''}>🔄</span>
+                        <span>{isLoadingHaircuts ? 'Syncing...' : 'Refresh Live Styles'}</span>
+                      </button>
+                    </div>
+
+                    {/* Gender Filter Tabs */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <span className="text-xs font-bold opacity-60 mr-1">Filter Gender:</span>
+                      {[
+                        { id: 'ALL', label: 'All Styles' },
+                        { id: 'MALE', label: '👨 Men (MALE)' },
+                        { id: 'FEMALE', label: '👩 Women (FEMALE)' },
+                        { id: 'UNISEX', label: '✨ Unisex' }
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setGenderFilter(tab.id as any)}
+                          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${
+                            genderFilter === tab.id
+                              ? isLight
+                                ? 'bg-[#6f331d] text-white shadow-sm'
+                                : 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                              : isLight
+                              ? 'bg-[#f4ece7] text-[#53433e] hover:bg-[#e9e1dc]'
+                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
 
                     {/* Category Filter Chips */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1">
+                      <span className="text-xs font-bold opacity-60 mr-1 shrink-0">Category:</span>
                       {categories.map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setCategoryFilter(cat)}
-                          className={`text-xs px-3 py-1.5 rounded-xl font-medium transition-all ${
+                          className={`text-xs px-3 py-1 rounded-lg font-medium transition-all shrink-0 ${
                             categoryFilter === cat
                               ? isLight
-                                ? 'bg-[#6f331d] text-white'
-                                : 'bg-amber-500 text-slate-950 font-bold'
+                                ? 'bg-[#8c4a32] text-white'
+                                : 'bg-amber-400/20 border border-amber-400/40 text-amber-300 font-bold'
                               : isLight
-                              ? 'bg-[#f4ece7] text-[#53433e] hover:bg-[#e9e1dc]'
-                              : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-slate-900/60 text-slate-400 hover:bg-slate-800'
                           }`}
                         >
                           {cat}
@@ -349,82 +519,193 @@ function BookingContent() {
                     </div>
                   </div>
 
-                  {/* Haircut Services Grid */}
-                  <div className="space-y-3">
-                    {filteredServices.map((service) => {
-                      const isSelected = selectedService && selectedService.id === service.id;
-                      return (
+                  {/* Haircut Services List */}
+                  {isLoadingHaircuts ? (
+                    /* Loading Skeleton */
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
                         <div
-                          key={service.id}
-                          onClick={() => setSelectedService(service)}
-                          className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-4 ${
-                            isSelected
-                              ? isLight
-                                ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20 shadow-md'
-                                : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20 shadow-lg'
-                              : isLight
-                              ? 'border-[#e9e1dc] hover:border-[#d9c2ba] bg-white'
-                              : 'border-slate-800/80 hover:border-slate-700 bg-[#0B0F17]/40'
+                          key={i}
+                          className={`p-4 rounded-2xl border animate-pulse flex items-center justify-between gap-4 ${
+                            isLight ? 'bg-slate-100/70 border-slate-200' : 'bg-slate-900/40 border-slate-800'
                           }`}
                         >
                           <div className="flex items-center gap-4">
-                            <div
-                              className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold transition-all ${
-                                isSelected
-                                  ? isLight
-                                    ? 'bg-[#6f331d] text-white border-[#6f331d]'
-                                    : 'bg-amber-500 text-slate-950 border-amber-500'
-                                  : 'border-slate-400 text-transparent'
-                              }`}
-                            >
-                              ✓
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-sm sm:text-base">{service.name}</h3>
-                                <span
-                                  className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                    isLight
-                                      ? 'bg-[#f4ece7] text-[#6f331d]'
-                                      : 'bg-slate-800 text-slate-300'
-                                  }`}
-                                >
-                                  {service.cat}
-                                </span>
-                              </div>
-                              <p className="text-xs opacity-70 mt-1 flex items-center gap-2">
-                                <span>⏱ {service.duration} mins</span>
-                                <span>•</span>
-                                <span>Includes consultation, precision scissor cut & styling</span>
-                              </p>
+                            <div className="w-16 h-16 rounded-xl bg-slate-400/20 shrink-0" />
+                            <div className="space-y-2">
+                              <div className="h-4 w-40 bg-slate-400/20 rounded" />
+                              <div className="h-3 w-64 bg-slate-400/15 rounded" />
                             </div>
                           </div>
-
-                          <div className="text-right">
-                            <div
-                              className={`text-base sm:text-lg font-bold font-serif ${
-                                isLight ? 'text-[#6f331d]' : 'text-amber-400'
-                              }`}
-                            >
-                              ₹{service.price}
-                            </div>
-                            <span className="text-[10px] opacity-60">Inclusive of taxes</span>
-                          </div>
+                          <div className="h-6 w-16 bg-slate-400/20 rounded" />
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  ) : filteredServices.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="text-3xl">✂️</div>
+                      <div className="text-sm font-bold">No haircut styles found for this filter</div>
+                      <p className="text-xs opacity-60 max-w-sm mx-auto">
+                        Try switching to "All Styles" or resetting your category filter to browse the full salon catalog.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setGenderFilter('ALL');
+                          setCategoryFilter('All');
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                          isLight
+                            ? 'border-[#d9c2ba] text-[#6f331d] hover:bg-[#f4ece7]'
+                            : 'border-slate-700 text-amber-400 hover:bg-slate-800'
+                        }`}
+                      >
+                        Reset All Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredServices.map((service: any) => {
+                        const isSelected = selectedService && selectedService.id === service.id;
+                        const durationMins = service.durationMinutes || service.duration || 30;
+                        const sGender = String(service.gender || 'UNISEX').toUpperCase();
+
+                        return (
+                          <div
+                            key={service.id}
+                            onClick={() => setSelectedService(service)}
+                            className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group ${
+                              isSelected
+                                ? isLight
+                                  ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20 shadow-md'
+                                  : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20 shadow-lg'
+                                : isLight
+                                ? 'border-[#e9e1dc] hover:border-[#d9c2ba] bg-white hover:shadow-sm'
+                                : 'border-slate-800/80 hover:border-slate-700 bg-[#0B0F17]/40 hover:bg-[#121826]/80'
+                            }`}
+                          >
+                            <div className="flex items-start sm:items-center gap-4 w-full sm:w-auto">
+                              {/* Selection Indicator Checkbox */}
+                              <div
+                                className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 mt-1 sm:mt-0 transition-all ${
+                                  isSelected
+                                    ? isLight
+                                      ? 'bg-[#6f331d] text-white border-[#6f331d]'
+                                      : 'bg-amber-500 text-slate-950 border-amber-500'
+                                    : 'border-slate-400 text-transparent'
+                                }`}
+                              >
+                                ✓
+                              </div>
+
+                              {/* Haircut Image Thumbnail */}
+                              {service.imageUrl && (
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-inherit bg-slate-800/40 shadow-sm relative">
+                                  <img
+                                    src={service.imageUrl}
+                                    alt={service.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    onError={(e: any) => {
+                                      e.currentTarget.src =
+                                        sGender === 'FEMALE'
+                                          ? 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=500'
+                                          : 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500';
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Haircut Details */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="font-bold text-sm sm:text-base tracking-tight group-hover:text-amber-500 transition-colors">
+                                    {service.name}
+                                  </h3>
+                                  
+                                  {/* Gender Pill Badge */}
+                                  <span
+                                    className={`text-[9px] uppercase font-extrabold px-2 py-0.5 rounded-md border ${
+                                      sGender === 'FEMALE'
+                                        ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                                        : sGender === 'MALE'
+                                        ? 'bg-sky-500/10 text-sky-500 border-sky-500/20'
+                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    }`}
+                                  >
+                                    {sGender}
+                                  </span>
+
+                                  {service.cat && service.cat !== sGender && (
+                                    <span
+                                      className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                                        isLight ? 'bg-[#f4ece7] text-[#6f331d]' : 'bg-slate-800 text-slate-300'
+                                      }`}
+                                    >
+                                      {service.cat}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {service.description && (
+                                  <p className="text-xs opacity-75 mt-1 line-clamp-2 leading-relaxed">
+                                    {service.description}
+                                  </p>
+                                )}
+
+                                <div className="text-xs opacity-60 mt-1.5 flex items-center gap-2">
+                                  <span>⏱ {durationMins} mins</span>
+                                  <span>•</span>
+                                  <span>Includes precision consultation & styling</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Price & Selection Callout */}
+                            <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-inherit shrink-0">
+                              <div
+                                className={`text-lg sm:text-xl font-black font-serif ${
+                                  isLight ? 'text-[#6f331d]' : 'text-amber-400'
+                                }`}
+                              >
+                                ₹{service.price}
+                              </div>
+                              <span className="text-[10px] opacity-60">Inclusive of taxes</span>
+                              <span
+                                className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                  isSelected
+                                    ? isLight
+                                      ? 'bg-[#6f331d] text-white'
+                                      : 'bg-amber-500 text-slate-950 font-black'
+                                    : 'opacity-40'
+                                }`}
+                              >
+                                {isSelected ? 'Selected ✓' : 'Click to Select'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Step 1 Actions */}
-                  <div className="pt-6 mt-6 border-t border-inherit flex justify-end">
+                  <div className="pt-6 mt-6 border-t border-inherit flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-xs opacity-70">
+                      {selectedService ? (
+                        <span>
+                          Selected: <strong className="text-amber-500">{selectedService.name}</strong> (₹{selectedService.price})
+                        </span>
+                      ) : (
+                        <span>Please click a haircut style above to continue</span>
+                      )}
+                    </div>
                     <button
                       onClick={() => setStep(2)}
                       disabled={!selectedService}
-                      className={`px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
+                      className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
                         selectedService
                           ? isLight
                             ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white'
-                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
                           : 'opacity-40 cursor-not-allowed bg-slate-500 text-white'
                       }`}
                     >
@@ -434,199 +715,411 @@ function BookingContent() {
                 </div>
               )}
 
-              {/* STEP 2: TIMING (SECTION 1: CURRENT TOKEN vs SECTION 2: ADVANCE SLOT) */}
+              {/* STEP 2: TIMING & QUEUE TOKEN (REVAMPED ULTRA-PROPER UI) */}
               {step === 2 && (
                 <div
-                  className={`rounded-3xl p-6 sm:p-8 border shadow-lg ${
+                  className={`rounded-3xl p-6 sm:p-8 border shadow-xl transition-all ${
                     isLight ? 'bg-white border-[#d9c2ba]' : 'bg-[#121826] border-slate-800'
                   }`}
                 >
-                  <div className="pb-4 border-b border-inherit mb-6">
-                    <h2 className="text-xl font-serif font-bold">Step 2: Select Timing & Queue Token</h2>
-                    <p className="text-xs opacity-75 mt-0.5">
-                      Choose whether you want an immediate Live Queue Token today, or an advance scheduled slot.
+                  {/* Step Header */}
+                  <div className="pb-5 border-b border-inherit mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                        <Clock className="w-3.5 h-3.5" />
+                        Step 2 of 4 • Timing & Queue Allocation
+                      </span>
+                      <span className="text-xs opacity-60 font-medium">
+                        Branch #{salon.id} • {salon.name}
+                      </span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
+                      Select Timing & Queue Access
+                    </h2>
+                    <p className="text-xs sm:text-sm opacity-75 mt-1">
+                      Choose an immediate Live Queue Token with real-time floor updates, or pre-book a scheduled appointment slot.
                     </p>
                   </div>
 
-                  {/* Mode Tabs / Toggle */}
-                  <div
-                    className={`grid grid-cols-2 p-1.5 rounded-2xl border mb-6 ${
-                      isLight ? 'bg-[#f4ece7] border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
-                    }`}
-                  >
-                    <button
+                  {/* Mode Selector: 2 Prominent Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    {/* OPTION 1: LIVE QUEUE TOKEN */}
+                    <div
                       onClick={() => setTimingMode('current_token')}
-                      className={`py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
                         timingMode === 'current_token'
                           ? isLight
-                            ? 'bg-white text-[#6f331d] shadow-md border border-[#d9c2ba]'
-                            : 'bg-slate-800 text-amber-400 shadow-md border border-slate-700'
-                          : 'opacity-70 hover:opacity-100'
+                            ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
+                            : 'bg-gradient-to-br from-slate-900 to-[#161f33] border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/25'
+                          : isLight
+                          ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] opacity-80 hover:opacity-100'
+                          : 'bg-[#0B0F17]/50 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
                       }`}
                     >
-                      <span>⚡ Current Live Token</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-white font-bold animate-pulse">
-                        LIVE
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setTimingMode('advance_slot')}
-                      className={`py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                        timingMode === 'advance_slot'
-                          ? isLight
-                            ? 'bg-white text-[#6f331d] shadow-md border border-[#d9c2ba]'
-                            : 'bg-slate-800 text-amber-400 shadow-md border border-slate-700'
-                          : 'opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      <span>📅 Advance Day & Time</span>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                          isLight ? 'bg-[#d9c2ba] text-[#53433e]' : 'bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        SCHEDULE
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* SECTION 1: CURRENT LIVE QUEUE TOKEN */}
-                  {timingMode === 'current_token' && (
-                    <div className="space-y-6">
-                      <div
-                        className={`p-6 rounded-2xl border relative overflow-hidden ${
-                          isLight
-                            ? 'bg-gradient-to-br from-[#fff8f4] to-[#f4ece7] border-[#6f331d]/40 ring-2 ring-[#6f331d]/20'
-                            : 'bg-gradient-to-br from-slate-900 to-[#0B0F17] border-amber-500/50 ring-2 ring-amber-500/20'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-4">
-                          <span className="text-xs uppercase tracking-widest font-bold text-emerald-500 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                            Live Queue Slot • Open Now
-                          </span>
-                          <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                              isLight ? 'bg-white border text-[#6f331d]' : 'bg-slate-800 text-slate-200'
-                            }`}
-                          >
-                            Immediate Walk-in
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center my-4">
-                          {/* Currently Serving */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2.5">
                           <div
-                            className={`p-4 rounded-xl border ${
-                              isLight ? 'bg-white/80 border-[#d9c2ba]' : 'bg-slate-950/60 border-slate-800'
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              timingMode === 'current_token'
+                                ? 'bg-amber-500 text-slate-950 font-black'
+                                : isLight
+                                ? 'bg-[#f4ece7] text-[#6f331d]'
+                                : 'bg-slate-800 text-slate-300'
                             }`}
                           >
-                            <span className="text-[11px] uppercase tracking-wider opacity-60 font-semibold block">
-                              Currently Serving
-                            </span>
-                            <div className="text-3xl font-serif font-black mt-1">
-                              Token #{liveQueueServing}
-                            </div>
-                            <span className="text-[10px] text-emerald-500 font-semibold">Chairs 1 & 2 Active</span>
+                            <Zap className="w-5 h-5 fill-current" />
                           </div>
-
-                          {/* Your Assigned Token */}
-                          <div
-                            className={`p-4 rounded-xl border relative shadow-md ${
-                              isLight
-                                ? 'bg-white border-[#6f331d] ring-2 ring-[#6f331d]/15'
-                                : 'bg-slate-950 border-amber-500 ring-2 ring-amber-500/30'
-                            }`}
-                          >
-                            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] uppercase font-black px-2 py-0.5 rounded-full shadow-sm">
-                              Your Live Token
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-sm sm:text-base">Current Live Token</h3>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-500 text-white animate-pulse">
+                                LIVE
+                              </span>
                             </div>
-                            <span className="text-[11px] uppercase tracking-wider opacity-60 font-semibold block mt-1">
-                              Next Available Slot
-                            </span>
-                            <div
-                              className={`text-4xl font-serif font-black mt-0.5 ${
-                                isLight ? 'text-[#6f331d]' : 'text-amber-400'
-                              }`}
-                            >
-                              #{liveQueueToken}
-                            </div>
-                            <span className="text-[10px] opacity-75 font-semibold">Ready for You</span>
-                          </div>
-
-                          {/* Est Wait */}
-                          <div
-                            className={`p-4 rounded-xl border ${
-                              isLight ? 'bg-white/80 border-[#d9c2ba]' : 'bg-slate-950/60 border-slate-800'
-                            }`}
-                          >
-                            <span className="text-[11px] uppercase tracking-wider opacity-60 font-semibold block">
-                              Est. Wait Time
-                            </span>
-                            <div className="text-3xl font-serif font-black mt-1">
-                              ~{liveQueueWait}m
-                            </div>
-                            <span className="text-[10px] opacity-70">2 Guests ahead</span>
+                            <span className="text-[11px] opacity-70">Immediate walk-in queue for today</span>
                           </div>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-inherit text-xs opacity-80 flex items-center gap-2">
-                          <span>💡</span>
-                          <span>
-                            Selecting <strong>Current Live Token #{liveQueueToken}</strong> reserves your immediate turn today. You will receive live alerts when your turn approaches!
-                          </span>
+                        <div
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                            timingMode === 'current_token'
+                              ? isLight
+                                ? 'bg-[#6f331d] border-[#6f331d] text-white'
+                                : 'bg-amber-500 border-amber-500 text-slate-950'
+                              : 'border-slate-400 opacity-40'
+                          }`}
+                        >
+                          {timingMode === 'current_token' && <Check className="w-3 h-3 stroke-[3]" />}
                         </div>
                       </div>
 
-                      {/* Stylist Picker for Live Queue */}
-                      <div>
-                        <label className="block text-xs uppercase font-bold tracking-wider mb-2 opacity-80">
-                          Select Available Stylist
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {salon.stylists.map((st) => (
-                            <div
-                              key={st.id}
-                              onClick={() => setSelectedStylist(st.name)}
-                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                                selectedStylist === st.name
-                                  ? isLight
-                                    ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20'
-                                    : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20'
-                                  : isLight
-                                  ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
-                                  : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="font-bold text-xs">{st.name}</div>
-                                <div className="text-[10px] opacity-60">{st.role}</div>
-                              </div>
-                              <span className="text-xs font-bold text-amber-500">★ {st.rating}</span>
+                      <div
+                        className={`pt-3 border-t flex items-center justify-between text-xs font-semibold ${
+                          isLight ? 'border-[#d9c2ba]/60' : 'border-slate-800'
+                        }`}
+                      >
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          Next Token: {queueInfo?.nextAvailableToken || 'T-003'}
+                        </span>
+                        <span className="opacity-75">~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins wait</span>
+                      </div>
+                    </div>
+
+                    {/* OPTION 2: ADVANCE APPOINTMENT */}
+                    <div
+                      onClick={() => setTimingMode('advance_slot')}
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
+                        timingMode === 'advance_slot'
+                          ? isLight
+                            ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
+                            : 'bg-gradient-to-br from-slate-900 to-[#161f33] border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/25'
+                          : isLight
+                          ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] opacity-80 hover:opacity-100'
+                          : 'bg-[#0B0F17]/50 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              timingMode === 'advance_slot'
+                                ? 'bg-amber-500 text-slate-950 font-black'
+                                : isLight
+                                ? 'bg-[#f4ece7] text-[#6f331d]'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            <Calendar className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-sm sm:text-base">Advance Day & Slot</h3>
+                              <span
+                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                  isLight ? 'bg-[#d9c2ba] text-[#53433e]' : 'bg-slate-700 text-slate-300'
+                                }`}
+                              >
+                                SCHEDULED
+                              </span>
                             </div>
-                          ))}
+                            <span className="text-[11px] opacity-70">Book a guaranteed time in advance</span>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                            timingMode === 'advance_slot'
+                              ? isLight
+                                ? 'bg-[#6f331d] border-[#6f331d] text-white'
+                                : 'bg-amber-500 border-amber-500 text-slate-950'
+                              : 'border-slate-400 opacity-40'
+                          }`}
+                        >
+                          {timingMode === 'advance_slot' && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </div>
+
+                      <div
+                        className={`pt-3 border-t flex items-center justify-between text-xs font-semibold ${
+                          isLight ? 'border-[#d9c2ba]/60' : 'border-slate-800'
+                        }`}
+                      >
+                        <span className="opacity-75">Selected: {selectedDate}</span>
+                        <span className="font-bold">{selectedTimeSlot}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ========================================================================= */}
+                  {/* SECTION 1: CURRENT LIVE QUEUE TOKEN (REAL-TIME BACKEND INTEGRATED) */}
+                  {/* ========================================================================= */}
+                  {timingMode === 'current_token' && (
+                    <div className="space-y-8">
+                      {/* LUXURY DIGITAL TICKET PASS */}
+                      <div
+                        className={`rounded-3xl border shadow-xl relative overflow-hidden transition-all ${
+                          isLight
+                            ? 'bg-gradient-to-br from-[#fff8f4] via-[#fdf2eb] to-[#f7e6dc] border-[#d9c2ba]'
+                            : 'bg-gradient-to-br from-[#111726] via-[#0E1320] to-[#0A0D15] border-amber-500/40 shadow-amber-500/5'
+                        }`}
+                      >
+                        {/* Ticket Top Ribbon */}
+                        <div
+                          className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isLight ? 'border-[#d9c2ba]/60 bg-white/50' : 'border-slate-800 bg-slate-950/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                              Real-Time Live Queue Counter
+                            </span>
+                            <span className="text-xs opacity-50">• Indiranagar Floor</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => loadLiveQueue(salon.id)}
+                              disabled={isLoadingQueue}
+                              className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all ${
+                                isLight
+                                  ? 'border-[#d9c2ba] bg-white text-[#6f331d] hover:bg-[#f4ece7]'
+                                  : 'border-slate-700 bg-slate-900 text-amber-400 hover:bg-slate-800'
+                              }`}
+                              title="Refresh real-time queue status from backend"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${isLoadingQueue ? 'animate-spin' : ''}`} />
+                              <span>{isLoadingQueue ? 'Syncing...' : 'Live Sync'}</span>
+                            </button>
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                              ● Floor Active
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Main Ticket Pass Body */}
+                        <div className="p-6 sm:p-8">
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                            {/* Left Column: Huge Token & Metrics (7 Cols) */}
+                            <div className="lg:col-span-7 space-y-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] uppercase tracking-widest font-black text-amber-500 flex items-center gap-1">
+                                  <Ticket className="w-3.5 h-3.5" /> Next Available Token
+                                </span>
+                                <span className="text-xs opacity-40">•</span>
+                                <span className="text-xs font-bold opacity-75">
+                                  Position #{queueInfo?.nextQueuePosition || 3}
+                                </span>
+                              </div>
+
+                              {/* Prominent Glowing Token */}
+                              <div className="flex items-baseline gap-4">
+                                <div
+                                  className={`text-6xl sm:text-7xl font-mono font-black tracking-tight drop-shadow-sm ${
+                                    isLight ? 'text-[#6f331d]' : 'text-amber-400'
+                                  }`}
+                                >
+                                  {queueInfo?.nextAvailableToken || 'T-003'}
+                                </div>
+                                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                                  Ready to Claim
+                                </span>
+                              </div>
+
+                              {/* Metric Badges */}
+                              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                <div
+                                  className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold ${
+                                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
+                                  }`}
+                                >
+                                  <Clock className="w-4 h-4 text-amber-500" />
+                                  <span>Est. Wait: ~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins</span>
+                                </div>
+                                <div
+                                  className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold ${
+                                    isLight ? 'bg-white border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
+                                  }`}
+                                >
+                                  <Users className="w-4 h-4 text-blue-500" />
+                                  <span>{queueInfo?.totalWaiting ?? 2} ahead in line</span>
+                                </div>
+                              </div>
+
+                              <p className="text-xs opacity-75 leading-relaxed pt-1">
+                                💡 Arrive when your turn is called. Live SMS & in-app alerts will notify you as you approach the front of the queue.
+                              </p>
+                            </div>
+
+                            {/* Right Column: Live Salon Floor Radar (5 Cols) */}
+                            <div className="lg:col-span-5">
+                              <div
+                                className={`p-4 sm:p-5 rounded-2xl border ${
+                                  isLight ? 'bg-white/90 border-[#d9c2ba]' : 'bg-slate-950/70 border-slate-800/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between pb-3 border-b border-inherit mb-3">
+                                  <span className="text-[11px] uppercase font-bold tracking-wider opacity-70 flex items-center gap-1.5">
+                                    <Radio className="w-3.5 h-3.5 text-emerald-500" /> Salon Floor Radar
+                                  </span>
+                                  <span className="text-[10px] font-bold opacity-60">2 in Queue</span>
+                                </div>
+
+                                <div className="space-y-2.5 text-xs">
+                                  {/* Currently Serving Item */}
+                                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white font-mono font-bold flex items-center justify-center text-xs shadow-sm">
+                                        {queueInfo?.ongoingToken || 'T-001'}
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-xs">{queueInfo?.ongoingCustomerName || 'Rahul Sharma'}</div>
+                                        <div className="text-[10px] opacity-70">
+                                          Stylist: {queueInfo?.ongoingStylistName || 'Alex Rivera'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-white animate-pulse">
+                                      In Chair
+                                    </span>
+                                  </div>
+
+                                  {/* Waiting Queue Item */}
+                                  <div
+                                    className={`p-3 rounded-xl border flex items-center justify-between ${
+                                      isLight ? 'bg-[#f4ece7] border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-8 h-8 rounded-lg bg-slate-700 text-slate-200 font-mono font-bold flex items-center justify-center text-xs">
+                                        T-002
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-xs">Amit Verma</div>
+                                        <div className="text-[10px] opacity-70">Beard Trim • ~15m wait</div>
+                                      </div>
+                                    </div>
+                                    <span className="text-[10px] font-bold opacity-60 uppercase">Waiting</span>
+                                  </div>
+
+                                  {/* Next Slot: Customer's Pass */}
+                                  <div className="p-2.5 rounded-xl border-2 border-dashed border-amber-500/50 bg-amber-500/5 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-amber-500 font-bold">★ Your Next Token</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-amber-500 text-xs">
+                                      {queueInfo?.nextAvailableToken || 'T-003'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* STYLIST PICKER FOR LIVE QUEUE */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs uppercase font-extrabold tracking-wider opacity-80 flex items-center gap-1.5">
+                            <Scissors className="w-3.5 h-3.5 text-amber-500" /> Choose Your Stylist for This Token
+                          </label>
+                          <span className="text-[11px] opacity-60">All stylists active on floor</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          {salon.stylists.map((st) => {
+                            const isStylistSelected = selectedStylist === st.name;
+                            return (
+                              <div
+                                key={st.id}
+                                onClick={() => setSelectedStylist(st.name)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                  isStylistSelected
+                                    ? isLight
+                                      ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
+                                      : 'bg-slate-900 border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                                    : isLight
+                                    ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
+                                    : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div
+                                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                                        isStylistSelected
+                                          ? 'bg-amber-500 text-slate-950'
+                                          : isLight
+                                          ? 'bg-[#f4ece7] text-[#6f331d]'
+                                          : 'bg-slate-800 text-slate-300'
+                                      }`}
+                                    >
+                                      {st.name.split(' ').map((n) => n[0]).join('')}
+                                    </div>
+                                    <span className="text-xs font-bold text-amber-500 flex items-center gap-0.5">
+                                      <Star className="w-3 h-3 fill-amber-500" /> {st.rating}
+                                    </span>
+                                  </div>
+
+                                  <div className="font-bold text-sm">{st.name}</div>
+                                  <div className="text-[11px] opacity-60 mt-0.5">{st.role}</div>
+                                </div>
+
+                                <div className="mt-3 pt-2.5 border-t border-inherit flex items-center justify-between text-[10px]">
+                                  <span className="text-emerald-500 font-bold">● Active Now</span>
+                                  {isStylistSelected && (
+                                    <span className="font-bold text-amber-500 flex items-center gap-0.5">
+                                      <Check className="w-3 h-3" /> Selected
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* SECTION 2: ADVANCE DAY, TIME & TOKEN SELECTION */}
+                  {/* ========================================================================= */}
+                  {/* SECTION 2: ADVANCE DAY & TIME SLOT SELECTION */}
+                  {/* ========================================================================= */}
                   {timingMode === 'advance_slot' && (
                     <div className="space-y-6">
                       {/* Day Selection */}
                       <div>
-                        <label className="block text-xs uppercase font-bold tracking-wider mb-2 opacity-80">
-                          1. Select Day
+                        <label className="block text-xs uppercase font-extrabold tracking-wider mb-2.5 opacity-80">
+                          1. Select Date
                         </label>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                           {availableDates.map((d) => {
                             const isDateSelected = selectedDate === d.label;
                             return (
                               <button
                                 key={d.label}
                                 onClick={() => setSelectedDate(d.label)}
-                                className={`py-3 px-2 rounded-2xl border text-center transition-all ${
+                                className={`py-3.5 px-3 rounded-2xl border-2 text-center transition-all cursor-pointer ${
                                   isDateSelected
                                     ? isLight
                                       ? 'bg-[#6f331d] text-white border-[#6f331d] shadow-md'
@@ -636,8 +1129,15 @@ function BookingContent() {
                                     : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
                                 }`}
                               >
-                                <div className="text-xs font-bold">{d.label}</div>
-                                <div className="text-[10px] opacity-75">{d.sub}</div>
+                                <div className="text-xs font-extrabold">{d.label}</div>
+                                <div className="text-[11px] opacity-75 mt-0.5">{d.sub}</div>
+                                <span className={`inline-block mt-1.5 text-[9px] px-2 py-0.2 rounded-full font-bold ${
+                                  isDateSelected
+                                    ? isLight ? 'bg-white/20 text-white' : 'bg-slate-950/20 text-slate-950'
+                                    : 'opacity-50'
+                                }`}>
+                                  Available
+                                </span>
                               </button>
                             );
                           })}
@@ -646,37 +1146,38 @@ function BookingContent() {
 
                       {/* Time Slot Selection */}
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs uppercase font-bold tracking-wider opacity-80">
-                            2. Select Time Slot
+                        <div className="flex items-center justify-between mb-2.5">
+                          <label className="text-xs uppercase font-extrabold tracking-wider opacity-80">
+                            2. Select Preferred Time Slot
                           </label>
-                          <span className="text-[11px] opacity-60">Slots every 45 mins</span>
+                          <span className="text-[11px] opacity-60">Slots available every 45 mins</span>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {Object.entries(timeSlots).map(([period, slots]) => (
-                            <div key={period}>
-                              <span className="text-[10px] uppercase font-bold opacity-60 tracking-wider block mb-1.5">
+                            <div key={period} className={`p-4 rounded-2xl border ${isLight ? 'bg-[#fff8f4] border-[#d9c2ba]' : 'bg-slate-900/60 border-slate-800'}`}>
+                              <span className="text-[11px] uppercase font-bold opacity-70 tracking-wider block mb-2.5">
                                 {period}
                               </span>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 {slots.map((slot) => {
                                   const isSlotSelected = selectedTimeSlot === slot;
                                   return (
                                     <button
                                       key={slot}
                                       onClick={() => setSelectedTimeSlot(slot)}
-                                      className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
+                                      className={`py-2.5 px-3 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                                         isSlotSelected
                                           ? isLight
-                                            ? 'bg-[#6f331d] text-white border-[#6f331d] shadow-sm font-bold'
-                                            : 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm font-bold'
+                                            ? 'bg-[#6f331d] text-white border-[#6f331d] shadow-sm'
+                                            : 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
                                           : isLight
                                           ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba] text-[#1e1b18]'
-                                          : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
+                                          : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
                                       }`}
                                     >
-                                      {slot}
+                                      {isSlotSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                      <span>{slot}</span>
                                     </button>
                                   );
                                 })}
@@ -686,28 +1187,28 @@ function BookingContent() {
                         </div>
                       </div>
 
-                      {/* Pre-allocated Advance Token Display */}
+                      {/* Pre-allocated Advance Token Card */}
                       <div
-                        className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+                        className={`p-5 rounded-2xl border flex items-center justify-between gap-4 ${
                           isLight ? 'bg-[#fff8f4] border-[#d9c2ba]' : 'bg-slate-900 border-slate-800'
                         }`}
                       >
                         <div>
-                          <span className="text-[10px] uppercase tracking-wider font-bold opacity-60">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">
                             Advance Slot Token Pre-Allocation
                           </span>
-                          <div className="text-sm font-bold mt-0.5">
-                            Reserved Slot Token: <span className="font-mono text-amber-500">{scheduledToken}</span>
+                          <div className="text-base font-bold mt-0.5">
+                            Reserved Pass Token: <span className="font-mono text-amber-500">{scheduledToken}</span>
                           </div>
-                          <p className="text-[11px] opacity-70 mt-0.5">
-                            Guaranteed priority window for {selectedDate} at {selectedTimeSlot}.
+                          <p className="text-xs opacity-75 mt-0.5">
+                            Guaranteed priority salon chair window for {selectedDate} at {selectedTimeSlot}.
                           </p>
                         </div>
                         <div
-                          className={`w-12 h-12 rounded-xl border flex items-center justify-center font-mono font-black text-lg ${
+                          className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center font-mono font-black text-xl shadow-sm shrink-0 ${
                             isLight
                               ? 'bg-white border-[#d9c2ba] text-[#6f331d]'
-                              : 'bg-[#0B0F17] border-amber-500/30 text-amber-400'
+                              : 'bg-[#0B0F17] border-amber-500/40 text-amber-400'
                           }`}
                         >
                           S14
@@ -716,41 +1217,73 @@ function BookingContent() {
 
                       {/* Stylist Selection for Advance Slot */}
                       <div>
-                        <label className="block text-xs uppercase font-bold tracking-wider mb-2 opacity-80">
+                        <label className="block text-xs uppercase font-extrabold tracking-wider mb-2.5 opacity-80">
                           3. Select Preferred Stylist
                         </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {salon.stylists.map((st) => (
-                            <div
-                              key={st.id}
-                              onClick={() => setSelectedStylist(st.name)}
-                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                                selectedStylist === st.name
-                                  ? isLight
-                                    ? 'bg-[#fff8f4] border-[#6f331d] ring-2 ring-[#6f331d]/20'
-                                    : 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20'
-                                  : isLight
-                                  ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
-                                  : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="font-bold text-xs">{st.name}</div>
-                                <div className="text-[10px] opacity-60">{st.role}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          {salon.stylists.map((st) => {
+                            const isStylistSelected = selectedStylist === st.name;
+                            return (
+                              <div
+                                key={st.id}
+                                onClick={() => setSelectedStylist(st.name)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                  isStylistSelected
+                                    ? isLight
+                                      ? 'bg-[#fff8f4] border-[#6f331d] shadow-md ring-2 ring-[#6f331d]/20'
+                                      : 'bg-slate-900 border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                                    : isLight
+                                    ? 'bg-white border-[#e9e1dc] hover:border-[#d9c2ba]'
+                                    : 'bg-[#0B0F17]/40 border-slate-800 hover:border-slate-700'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div
+                                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                                        isStylistSelected
+                                          ? 'bg-amber-500 text-slate-950'
+                                          : isLight
+                                          ? 'bg-[#f4ece7] text-[#6f331d]'
+                                          : 'bg-slate-800 text-slate-300'
+                                      }`}
+                                    >
+                                      {st.name.split(' ').map((n) => n[0]).join('')}
+                                    </div>
+                                    <span className="text-xs font-bold text-amber-500 flex items-center gap-0.5">
+                                      <Star className="w-3 h-3 fill-amber-500" /> {st.rating}
+                                    </span>
+                                  </div>
+
+                                  <div className="font-bold text-sm">{st.name}</div>
+                                  <div className="text-[11px] opacity-60 mt-0.5">{st.role}</div>
+                                </div>
+
+                                <div className="mt-3 pt-2.5 border-t border-inherit flex items-center justify-between text-[10px]">
+                                  <span className="text-emerald-500 font-bold">● Guaranteed Slot</span>
+                                  {isStylistSelected && (
+                                    <span className="font-bold text-amber-500 flex items-center gap-0.5">
+                                      <Check className="w-3 h-3" /> Selected
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <span className="text-xs font-bold text-amber-500">★ {st.rating}</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Step 2 Actions */}
-                  <div className="pt-6 mt-6 border-t border-inherit flex items-center justify-between">
+                  {/* Step 2 Bottom Actions Bar & Summary */}
+                  <div
+                    className={`pt-6 mt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
+                      isLight ? 'border-[#d9c2ba]' : 'border-slate-800'
+                    }`}
+                  >
                     <button
                       onClick={() => setStep(1)}
-                      className={`px-6 py-2.5 rounded-xl font-bold text-xs border transition-all ${
+                      className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs border transition-all ${
                         isLight
                           ? 'border-[#d9c2ba] text-[#53433e] hover:bg-[#e9e1dc]'
                           : 'border-slate-800 text-slate-300 hover:bg-slate-800'
@@ -758,16 +1291,29 @@ function BookingContent() {
                     >
                       ← Back to Haircuts
                     </button>
-                    <button
-                      onClick={() => setStep(3)}
-                      className={`px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
-                        isLight
-                          ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white'
-                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                      }`}
-                    >
-                      Proceed to Details →
-                    </button>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <button
+                        onClick={() => setStep(3)}
+                        className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
+                          isLight
+                            ? 'bg-[#6f331d] hover:bg-[#5a2816] text-white shadow-[#6f331d]/20'
+                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                        }`}
+                      >
+                        {timingMode === 'current_token' ? (
+                          <>
+                            <span>Claim & Book Token {queueInfo?.nextAvailableToken || 'T-003'}</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        ) : (
+                          <>
+                            <span>Proceed to Details ({selectedTimeSlot})</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1013,18 +1559,31 @@ function BookingContent() {
                     <div className="text-[11px] opacity-70 mt-0.5">{salon.address}</div>
                   </div>
 
-                  {/* Selected Service */}
-                  <div className="pt-3 border-t border-inherit flex justify-between items-start">
-                    <div>
-                      <div className="font-bold">
-                        {selectedService ? selectedService.name : 'Select a service'}
-                      </div>
-                      <div className="text-[10px] opacity-60">
-                        {selectedService ? `${selectedService.duration} mins • ${selectedService.cat}` : '—'}
+                  {/* Selected Service / Haircut */}
+                  <div className="pt-3 border-t border-inherit flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {selectedService?.imageUrl && (
+                        <img
+                          src={selectedService.imageUrl}
+                          alt={selectedService.name}
+                          className="w-10 h-10 rounded-lg object-cover border border-inherit shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold truncate text-xs sm:text-sm">
+                          {selectedService ? selectedService.name : 'Select a haircut style'}
+                        </div>
+                        <div className="text-[10px] opacity-60">
+                          {selectedService
+                            ? `${selectedService.durationMinutes || selectedService.duration || 30} mins • ${
+                                selectedService.gender ? `${selectedService.gender} • ` : ''
+                              }${selectedService.cat || 'Haircut'}`
+                            : '—'}
+                        </div>
                       </div>
                     </div>
                     <div
-                      className={`font-bold font-serif ${
+                      className={`font-bold font-serif shrink-0 ${
                         isLight ? 'text-[#6f331d]' : 'text-amber-400'
                       }`}
                     >
@@ -1041,9 +1600,9 @@ function BookingContent() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-bold text-emerald-500 flex items-center gap-1">
-                            <span>● Live Token #{liveQueueToken}</span>
+                            <span>● Live Token {queueInfo?.nextAvailableToken || 'T-003'}</span>
                           </div>
-                          <div className="text-[10px] opacity-70">~{liveQueueWait} mins estimated wait</div>
+                          <div className="text-[10px] opacity-70">~{queueInfo?.estimatedWaitMinutesForNext ?? 35} mins estimated wait</div>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">
                           Today

@@ -29,6 +29,8 @@ export interface SalonDTO {
   city: string;
   state?: string;
   phone?: string;
+  email?: string;
+  operatingTimings?: string;
   status: string;
   salonType?: string;
   pincode?: string;
@@ -138,6 +140,10 @@ export async function createAdminSalon(salon: SalonDTO): Promise<SalonDTO | null
       city: salon.city,
       state: salon.state || "",
       phone: salon.phone || "",
+      email: salon.email || "",
+      operatingTimings: salon.operatingTimings || "09:00 AM - 09:00 PM",
+      salonType: salon.salonType || "UNISEX",
+      pincode: salon.pincode || "",
       status: salon.status || "ACTIVE"
     };
 
@@ -165,6 +171,10 @@ export async function updateAdminSalon(id: number, salon: SalonDTO): Promise<Sal
       city: salon.city,
       state: salon.state || "",
       phone: salon.phone || "",
+      email: salon.email || "",
+      operatingTimings: salon.operatingTimings || "09:00 AM - 09:00 PM",
+      salonType: salon.salonType || "UNISEX",
+      pincode: salon.pincode || "",
       status: salon.status || "ACTIVE"
     };
 

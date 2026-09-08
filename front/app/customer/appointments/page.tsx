@@ -221,8 +221,8 @@ function AppointmentsContent() {
 
                   <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-amber-500">Live Token #3</span>
-                      <span className="opacity-60">• Estimated Wait: ~20 mins</span>
+                      <span className="font-bold text-amber-500">Live Token {apt.tokenNumber || 'T-003'}</span>
+                      <span className="opacity-60">• Estimated Wait: ~{apt.estimatedWaitMinutes || 35} mins</span>
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -232,7 +232,7 @@ function AppointmentsContent() {
                           isLight ? 'bg-[#6f331d] text-white' : 'bg-amber-500 text-slate-950'
                         }`}
                       >
-                        Track Live Queue →
+                        Track Live Queue ({apt.tokenNumber || 'T-003'}) →
                       </Link>
 
                       <button

@@ -1,24 +1,26 @@
 export interface DetectedLocation {
   city: string;
   area: string;
+  pincode?: string;
   formatted: string;
   latitude?: number;
   longitude?: number;
   source: 'gps' | 'ip' | 'manual';
 }
 
-// Known coordinates for major Indian hubs for offline/fallback proximity matching
-const KNOWN_METROS: { name: string; area: string; lat: number; lng: number }[] = [
-  { name: 'Mumbai', area: 'Bandra West', lat: 19.0760, lng: 72.8777 },
-  { name: 'Pune', area: 'Koregaon Park', lat: 18.5204, lng: 73.8567 },
-  { name: 'Bengaluru', area: 'Indiranagar', lat: 12.9716, lng: 77.5946 },
-  { name: 'Delhi NCR', area: 'Connaught Place', lat: 28.6139, lng: 77.2090 },
-  { name: 'Hyderabad', area: 'Jubilee Hills', lat: 17.3850, lng: 78.4867 },
-  { name: 'Chennai', area: 'Nungambakkam', lat: 13.0827, lng: 80.2707 },
-  { name: 'Kolkata', area: 'Park Street', lat: 22.5726, lng: 88.3639 },
-  { name: 'Ahmedabad', area: 'Bodakdev', lat: 23.0225, lng: 72.5714 },
-  { name: 'Chandigarh', area: 'Sector 17', lat: 30.7333, lng: 76.7794 },
-  { name: 'Jaipur', area: 'C-Scheme', lat: 26.9124, lng: 75.7873 },
+// Known coordinates and postal codes for major Indian hubs for offline/fallback proximity matching
+const KNOWN_METROS: { name: string; area: string; pincode: string; lat: number; lng: number }[] = [
+  { name: 'Bengaluru', area: 'Indiranagar', pincode: '560001', lat: 12.9716, lng: 77.5946 },
+  { name: 'Bengaluru', area: 'Koramangala', pincode: '560034', lat: 12.9352, lng: 77.6245 },
+  { name: 'Mumbai', area: 'Bandra West', pincode: '400050', lat: 19.0760, lng: 72.8777 },
+  { name: 'Pune', area: 'Koregaon Park', pincode: '411001', lat: 18.5204, lng: 73.8567 },
+  { name: 'Delhi NCR', area: 'Connaught Place', pincode: '110001', lat: 28.6139, lng: 77.2090 },
+  { name: 'Hyderabad', area: 'Jubilee Hills', pincode: '500033', lat: 17.3850, lng: 78.4867 },
+  { name: 'Chennai', area: 'Nungambakkam', pincode: '600034', lat: 13.0827, lng: 80.2707 },
+  { name: 'Kolkata', area: 'Park Street', pincode: '700016', lat: 22.5726, lng: 88.3639 },
+  { name: 'Ahmedabad', area: 'Bodakdev', pincode: '380054', lat: 23.0225, lng: 72.5714 },
+  { name: 'Chandigarh', area: 'Sector 17', pincode: '160017', lat: 30.7333, lng: 76.7794 },
+  { name: 'Jaipur', area: 'C-Scheme', pincode: '302001', lat: 26.9124, lng: 75.7873 },
 ];
 
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -36,6 +38,12 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 export const locationService = {
+  extractPincode(text?: string | null): string | null {
+    if (!text) return null;
+    const match = text.match(/\b([1-9][0-9]{5})\b/);
+    return match ? match[1] : null;
+  },
+
   getStoredLocation(): string | null {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('salonpulse_user_location');
@@ -57,10 +65,14 @@ export const locationService = {
         const data = await res.json();
         const city = data.city || data.locality || data.principalSubdivision || 'Mumbai';
         const area = data.locality || data.localityInfo?.administrative?.[3]?.name || 'Metro Area';
-        const formatted = area && area !== city ? `${area}, ${city}` : city;
+        const pincode = data.postcode || locationService.extractPincode(data.localityInfo?.informative?.[0]?.name) || undefined;
+        const formatted = area && area !== city
+          ? `${area}, ${city}${pincode ? ' ' + pincode : ''}`
+          : `${city}${pincode ? ' ' + pincode : ''}`;
         return {
           city,
           area,
+          pincode,
           formatted,
           latitude,
           longitude,
@@ -92,10 +104,14 @@ export const locationService = {
           addr.state ||
           'Mumbai';
         const area = addr.suburb || addr.neighbourhood || addr.residential || addr.road || '';
-        const formatted = area ? `${area}, ${city}` : city;
+        const pincode = addr.postcode ? addr.postcode.replace(/\s+/g, '') : undefined;
+        const formatted = area
+          ? `${area}, ${city}${pincode ? ' ' + pincode : ''}`
+          : `${city}${pincode ? ' ' + pincode : ''}`;
         return {
           city,
           area: area || city,
+          pincode,
           formatted,
           latitude,
           longitude,
@@ -117,10 +133,13 @@ export const locationService = {
       }
     }
 
-    const formatted = minDistance < 120 ? `${closest.area}, ${closest.name}` : `${closest.name}`;
+    const formatted = minDistance < 120
+      ? `${closest.area}, ${closest.name} ${closest.pincode}`
+      : `${closest.name} ${closest.pincode}`;
     return {
       city: closest.name,
       area: closest.area,
+      pincode: closest.pincode,
       formatted,
       latitude,
       longitude,
@@ -174,11 +193,13 @@ export const locationService = {
         const data = await res.json();
         const city = data.city || 'Mumbai';
         const region = data.region || 'Maharashtra';
-        const formatted = `${city}, ${region}`;
+        const pincode = data.postal ? data.postal.replace(/\s+/g, '') : undefined;
+        const formatted = `${city}, ${region}${pincode ? ' ' + pincode : ''}`;
         locationService.setStoredLocation(formatted);
         return {
           city,
           area: region,
+          pincode,
           formatted,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -191,7 +212,8 @@ export const locationService = {
     const def = {
       city: 'Mumbai',
       area: 'Bandra West',
-      formatted: 'Bandra West, Mumbai',
+      pincode: '400050',
+      formatted: 'Bandra West, Mumbai 400050',
       source: 'manual' as const
     };
     locationService.setStoredLocation(def.formatted);

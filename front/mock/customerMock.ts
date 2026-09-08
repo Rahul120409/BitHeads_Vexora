@@ -20,6 +20,19 @@ export interface SalonService {
   popular?: boolean;
 }
 
+export interface HaircutStyle {
+  id: number;
+  salonId: number;
+  name: string;
+  gender: 'MALE' | 'FEMALE' | 'UNISEX' | string;
+  price: number;
+  durationMinutes: number;
+  duration?: number;
+  description?: string;
+  imageUrl?: string;
+  cat?: string;
+}
+
 export interface StaffMember {
   id: number;
   name: string;
@@ -36,6 +49,7 @@ export type RefundStatus = 'NOT_REQUESTED' | 'PROCESSING' | 'REFUNDED' | 'FAILED
 
 export interface CustomerAppointment {
   id: number;
+  tokenNumber?: string;
   serviceId: number;
   serviceName: string;
   staffId: number;
@@ -53,15 +67,44 @@ export interface CustomerAppointment {
 export interface CustomerQueueStatus {
   queueId: number;
   appointmentId: number;
+  tokenNumber?: string;
   customerId: number;
   customerName: string;
-  serviceName: string;
+  customerPhone?: string;
+  serviceName?: string;
+  service?: string;
+  durationMinutes?: number;
   staffName: string;
   position: number;
-  peopleAhead: number;
+  peopleAhead?: number;
   estimatedWaitMinutes: number;
-  status: QueueStatus;
+  status: QueueStatus | string;
   joinedAt: string;
+}
+
+export interface QueueTicketItem {
+  queueId: number;
+  appointmentId: number;
+  tokenNumber: string;
+  customerName: string;
+  service: string;
+  staffName: string;
+  position?: number;
+  estimatedWaitMinutes?: number;
+  status: string;
+}
+
+export interface NextAvailableQueueInfo {
+  ongoingToken: string;
+  ongoingCustomerName?: string;
+  ongoingStylistName?: string;
+  totalServing: number;
+  totalWaiting: number;
+  nextAvailableToken: string;
+  nextQueuePosition: number;
+  estimatedWaitMinutesForNext: number;
+  currentlyServing: QueueTicketItem[];
+  waitingQueue: QueueTicketItem[];
 }
 
 // Current logged in demo customer
@@ -122,21 +165,28 @@ export const mockServices: SalonService[] = [
 // Available stylists
 export const mockStaffMembers: StaffMember[] = [
   {
-    id: 101,
+    id: 1,
     name: "Raj Malhotra",
-    role: "Master Stylist",
+    role: "Master Stylist & Hair Specialist",
     rating: 4.9,
     status: "AVAILABLE"
   },
   {
-    id: 102,
+    id: 2,
+    name: "Alex Rivera",
+    role: "Senior Barber & Fade Master",
+    rating: 4.9,
+    status: "AVAILABLE"
+  },
+  {
+    id: 3,
     name: "Amit Verma",
-    role: "Senior Barber",
+    role: "Senior Barber & Stylist",
     rating: 4.8,
     status: "AVAILABLE"
   },
   {
-    id: 103,
+    id: 4,
     name: "Priya Kapoor",
     role: "Skin & Spa Specialist",
     rating: 4.9,
@@ -144,17 +194,57 @@ export const mockStaffMembers: StaffMember[] = [
   }
 ];
 
-// Active Queue state for Rahul
+// Live Queue & Next Available Token state (matching GET /api/queue/next-available)
+export const defaultMockQueueInfo: NextAvailableQueueInfo = {
+  ongoingToken: "T-001",
+  ongoingCustomerName: "Rahul Sharma",
+  ongoingStylistName: "Alex Rivera",
+  totalServing: 1,
+  totalWaiting: 2,
+  nextAvailableToken: "T-003",
+  nextQueuePosition: 3,
+  estimatedWaitMinutesForNext: 35,
+  currentlyServing: [
+    {
+      queueId: 1,
+      appointmentId: 1,
+      tokenNumber: "T-001",
+      customerName: "Rahul Sharma",
+      service: "Classic Fade Haircut",
+      staffName: "Alex Rivera",
+      status: "SERVING"
+    }
+  ],
+  waitingQueue: [
+    {
+      queueId: 2,
+      appointmentId: 2,
+      tokenNumber: "T-002",
+      customerName: "Amit Verma",
+      service: "Beard Trim",
+      staffName: "Alex Rivera",
+      position: 1,
+      estimatedWaitMinutes: 15,
+      status: "WAITING"
+    }
+  ]
+};
+
+// Active Queue state for customer
 export const initialMockQueue: CustomerQueueStatus = {
-  queueId: 101,
-  appointmentId: 105,
+  queueId: 3,
+  appointmentId: 3,
+  tokenNumber: "T-003",
   customerId: 1,
   customerName: "Rahul Sharma",
-  serviceName: "Signature Haircut & Style",
-  staffName: "Raj Malhotra",
+  customerPhone: "9876543210",
+  serviceName: "Classic Fade Haircut",
+  service: "Classic Fade Haircut",
+  durationMinutes: 30,
+  staffName: "Alex Rivera",
   position: 3,
   peopleAhead: 2,
-  estimatedWaitMinutes: 20,
+  estimatedWaitMinutes: 35,
   status: "WAITING",
   joinedAt: "10:10 AM"
 };
@@ -211,9 +301,18 @@ export interface SalonLocation {
   rating: number;
   reviews: number;
   address: string;
+  city?: string;
+  state?: string;
+  phone?: string;
+  email?: string;
+  operatingTimings?: string;
+  salonType?: string;
+  pincode?: string;
+  status?: string;
   chairsAvailable: number;
   estWait: string;
-  image: string;
+  image?: string;
+  iconType?: 'scissors' | 'sparkles' | 'crown';
   badge?: string;
   services: { id: number; name: string; price: number; duration: number; cat: string }[];
   stylists: { id: number; name: string; role: string; rating: number }[];
@@ -226,7 +325,13 @@ export const mockNearbySalons: SalonLocation[] = [
     distance: '0.8 km away',
     rating: 4.9,
     reviews: 340,
-    address: '42 MG Road, Metro Promenade, Downtown',
+    address: '42 MG Road, Indiranagar, Bangalore 560001',
+    city: 'Bangalore',
+    state: 'Karnataka',
+    pincode: '560001',
+    phone: '+91 98765 43210',
+    operatingTimings: '09:00 AM - 09:00 PM',
+    salonType: 'UNISEX',
     chairsAvailable: 3,
     estWait: '~15 mins',
     image: '✂️',
@@ -251,7 +356,13 @@ export const mockNearbySalons: SalonLocation[] = [
     distance: '1.4 km away',
     rating: 4.95,
     reviews: 210,
-    address: '18 Rue de Haute, Galleria Arcade',
+    address: '18 Linking Road, Bandra West, Mumbai 400050',
+    city: 'Mumbai',
+    state: 'Maharashtra',
+    pincode: '400050',
+    phone: '+91 91234 56789',
+    operatingTimings: '10:00 AM - 08:30 PM',
+    salonType: 'FEMALE',
     chairsAvailable: 2,
     estWait: '~25 mins',
     image: '🌸',
@@ -272,7 +383,13 @@ export const mockNearbySalons: SalonLocation[] = [
     distance: '2.1 km away',
     rating: 4.8,
     reviews: 180,
-    address: '77 Heritage Boulevard, 2nd Floor',
+    address: '77 Koregaon Park Main Rd, Pune 411001',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411001',
+    phone: '+91 98123 45678',
+    operatingTimings: '08:30 AM - 09:30 PM',
+    salonType: 'MALE',
     chairsAvailable: 1,
     estWait: '~30 mins',
     image: '🧔',
@@ -286,6 +403,81 @@ export const mockNearbySalons: SalonLocation[] = [
       { id: 6, name: 'Kenji Sato', role: 'Grooming Master', rating: 4.9 },
       { id: 7, name: 'Sophie Chen', role: 'Stylist & Detailer', rating: 4.8 }
     ]
+  }
+];
+
+export const mockHaircutStyles: HaircutStyle[] = [
+  {
+    id: 1,
+    salonId: 1,
+    name: 'Classic Fade Haircut',
+    gender: 'MALE',
+    price: 350.0,
+    durationMinutes: 30,
+    duration: 30,
+    cat: 'Men',
+    description: 'Clean skin fade or taper cut styled with premium pomade.',
+    imageUrl: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500'
+  },
+  {
+    id: 2,
+    salonId: 1,
+    name: 'Layered Bob Cut',
+    gender: 'FEMALE',
+    price: 600.0,
+    durationMinutes: 45,
+    duration: 45,
+    cat: 'Women',
+    description: 'Textured layered bob cut with blow-dry styling.',
+    imageUrl: 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=500'
+  },
+  {
+    id: 3,
+    salonId: 1,
+    name: 'Textured Crop & Low Taper Fade',
+    gender: 'MALE',
+    price: 320.0,
+    durationMinutes: 30,
+    duration: 30,
+    cat: 'Men',
+    description: 'Modern textured top fringe with precision fade lines and matte paste.',
+    imageUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=500'
+  },
+  {
+    id: 4,
+    salonId: 1,
+    name: 'Luxe Butterfly Cut & Blowout',
+    gender: 'FEMALE',
+    price: 850.0,
+    durationMinutes: 50,
+    duration: 50,
+    cat: 'Women',
+    description: 'Cascading butterfly layers with weightless volume and thermal blowout styling.',
+    imageUrl: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?w=500'
+  },
+  {
+    id: 5,
+    salonId: 1,
+    name: 'Executive Scissor Cut & Hot Towel',
+    gender: 'MALE',
+    price: 400.0,
+    durationMinutes: 35,
+    duration: 35,
+    cat: 'Men',
+    description: 'Traditional scissor-over-comb bespoke haircut finished with refreshing eucalyptus hot towel.',
+    imageUrl: 'https://images.unsplash.com/photo-1517832606589-7629c3395907?w=500'
+  },
+  {
+    id: 6,
+    salonId: 1,
+    name: 'Keratin Smooth & Precision Trim',
+    gender: 'UNISEX',
+    price: 750.0,
+    durationMinutes: 45,
+    duration: 45,
+    cat: 'Unisex',
+    description: 'Deep nourishing keratin smoothing therapy with split-end seal precision trim.',
+    imageUrl: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500'
   }
 ];
 

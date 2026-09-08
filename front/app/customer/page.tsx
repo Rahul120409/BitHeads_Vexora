@@ -24,7 +24,10 @@ import {
   Loader2,
   SearchX,
   Filter,
-  Check
+  Check,
+  Phone,
+  Mail,
+  RefreshCw
 } from 'lucide-react';
 import { ThemeProvider, useTheme } from '../../components/customer/ThemeContext';
 import Navbar from '../../components/customer/Navbar';
@@ -35,23 +38,11 @@ import {
   CustomerUser,
   CustomerQueueStatus,
   CustomerAppointment,
-  mockCustomer
+  SalonLocation,
+  HaircutStyle,
+  mockCustomer,
+  mockHaircutStyles
 } from '../../mock/customerMock';
-
-interface SalonLocation {
-  id: number;
-  name: string;
-  distance: string;
-  rating: number;
-  reviews: number;
-  address: string;
-  chairsAvailable: number;
-  estWait: string;
-  iconType: 'scissors' | 'sparkles' | 'crown';
-  badge?: string;
-  services: { id: number; name: string; price: number; duration: number; cat: string }[];
-  stylists: { id: number; name: string; role: string; rating: number }[];
-}
 
 function CustomerHomeContent() {
   const { isLight } = useTheme();
@@ -74,6 +65,9 @@ function CustomerHomeContent() {
   const [selectedSalon, setSelectedSalon] = useState<SalonLocation | null>(null);
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3 | 4>(1); // 1: Haircut type, 2: Timing & Stylist, 3: Details, 4: Payment
   const [selectedHaircut, setSelectedHaircut] = useState<any>(null);
+  const [modalHaircuts, setModalHaircuts] = useState<HaircutStyle[]>([]);
+  const [isLoadingModalHaircuts, setIsLoadingModalHaircuts] = useState<boolean>(false);
+  const [modalGenderFilter, setModalGenderFilter] = useState<'ALL' | 'MALE' | 'FEMALE'>('ALL');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('10:30 AM');
   const [selectedDate, setSelectedDate] = useState('Today');
   const [selectedStylist, setSelectedStylist] = useState('Raj Malhotra');
@@ -82,6 +76,23 @@ function CustomerHomeContent() {
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'counter'>('upi');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentSuccessData, setPaymentSuccessData] = useState<any>(null);
+
+  const [salonsList, setSalonsList] = useState<SalonLocation[]>([]);
+  const [isFetchingSalons, setIsFetchingSalons] = useState(false);
+
+  const loadSalonsData = async () => {
+    setIsFetchingSalons(true);
+    try {
+      const realSalons = await customerService.getSalons();
+      if (realSalons && realSalons.length > 0) {
+        setSalonsList(realSalons);
+      }
+    } catch {
+      // Keep existing
+    } finally {
+      setIsFetchingSalons(false);
+    }
+  };
 
   useEffect(() => {
     let currentUser = customerService.getCurrentUser();
@@ -92,8 +103,16 @@ function CustomerHomeContent() {
     setCustomerName(currentUser.name);
     setCustomerPhone(currentUser.phone || currentUser.mobileNumber || '');
 
-    customerService.getQueueStatus(currentUser.id).then(setQueue);
+    const fetchLiveQueue = () => {
+      customerService.getQueueStatus(currentUser.id).then((q) => {
+        if (q) setQueue(q);
+      });
+    };
+    fetchLiveQueue();
+    const queueInterval = setInterval(fetchLiveQueue, 8000);
+
     customerService.getAppointments(currentUser.id).then(setAppointments);
+    loadSalonsData();
 
     // Check if user has previously saved location
     const storedLoc = locationService.getStoredLocation();
@@ -107,8 +126,13 @@ function CustomerHomeContent() {
       const timer = setTimeout(() => {
         setShowLocationPopup(true);
       }, 500);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearInterval(queueInterval);
+      };
     }
+
+    return () => clearInterval(queueInterval);
   }, []);
 
   const handleAllowRealTimeLocation = async () => {
@@ -184,14 +208,14 @@ function CustomerHomeContent() {
       const next = current - 1;
       setDemoSimulatedPos(next);
       if (next === 1) {
-        setToastMessage('🔔 Ding! Your token is NOW SERVING at Chair 2 with Raj Malhotra!');
+        setToastMessage(`🔔 Ding! Your token is NOW SERVING with ${queue?.staffName || 'Alex Rivera'} at Chair 2!`);
       } else {
         setToastMessage(`✨ Real-time update: Position #${next} (~${next * 10} mins wait remaining).`);
       }
       setTimeout(() => setToastMessage(null), 5000);
     } else {
       setDemoSimulatedPos(3);
-      setToastMessage('🔄 Demo queue reset to Token #3.');
+      setToastMessage('🔄 Demo queue reset to Position #3.');
       setTimeout(() => setToastMessage(null), 3000);
     }
   };
@@ -416,9 +440,34 @@ function CustomerHomeContent() {
     ];
   };
 
-  const nearbySalons = getDynamicSalons(userLocation);
+  const userPincode = locationService.extractPincode(userLocation);
+  const userCityClean = userLocation.split(',')[0].replace(/\b[0-9]{6}\b/g, '').trim().toLowerCase();
 
-  const renderSalonIcon = (iconType: 'scissors' | 'sparkles' | 'crown') => {
+  const rawSalons = salonsList.length > 0 ? salonsList : getDynamicSalons(userLocation);
+
+  // Sort and prioritize salons:
+  // 1. Direct Pincode match with user location (highest priority)
+  // 2. City match with user location
+  // 3. Other salons
+  const nearbySalons = [...rawSalons].sort((a, b) => {
+    if (userPincode) {
+      const aPinMatch = (a.pincode === userPincode) || a.address.includes(userPincode);
+      const bPinMatch = (b.pincode === userPincode) || b.address.includes(userPincode);
+      if (aPinMatch && !bPinMatch) return -1;
+      if (!aPinMatch && bPinMatch) return 1;
+    }
+
+    if (userCityClean) {
+      const aCityMatch = (a.city && a.city.toLowerCase().includes(userCityClean)) || a.address.toLowerCase().includes(userCityClean);
+      const bCityMatch = (b.city && b.city.toLowerCase().includes(userCityClean)) || b.address.toLowerCase().includes(userCityClean);
+      if (aCityMatch && !bCityMatch) return -1;
+      if (!aCityMatch && bCityMatch) return 1;
+    }
+
+    return 0;
+  });
+
+  const renderSalonIcon = (iconType?: 'scissors' | 'sparkles' | 'crown') => {
     switch (iconType) {
       case 'sparkles':
         return (
@@ -521,19 +570,45 @@ function CustomerHomeContent() {
   const filteredSalons = nearbySalons.filter((s) => {
     if (!isSearching) return true;
     const q = searchQuery.trim().toLowerCase();
+    const qPin = locationService.extractPincode(searchQuery);
+
+    if (qPin) {
+      if (s.pincode === qPin || s.address.includes(qPin)) return true;
+    }
+
+    const matchPincode = s.pincode ? s.pincode.toLowerCase().includes(q) : false;
     const matchName = s.name.toLowerCase().includes(q);
     const matchAddress = s.address.toLowerCase().includes(q);
+    const matchCity = s.city ? s.city.toLowerCase().includes(q) : false;
     const matchService = s.services.some((srv) => srv.name.toLowerCase().includes(q));
-    return matchName || matchAddress || matchService;
+    return matchPincode || matchName || matchAddress || matchCity || matchService;
   });
 
   // Open booking modal
-  const handleStartBooking = (salon: SalonLocation) => {
+  const handleStartBooking = async (salon: SalonLocation) => {
     setSelectedSalon(salon);
-    setSelectedHaircut(salon.services[0]);
-    setSelectedStylist(salon.stylists[0].name);
+    setSelectedHaircut(salon.services?.[0] || null);
+    setSelectedStylist(salon.stylists?.[0]?.name || 'Raj Malhotra');
     setBookingStep(1);
     setPaymentSuccessData(null);
+    setModalGenderFilter('ALL');
+    setIsLoadingModalHaircuts(true);
+
+    try {
+      const styles = await customerService.getHaircutStyles(salon.id);
+      if (styles && styles.length > 0) {
+        setModalHaircuts(styles);
+        setSelectedHaircut(styles[0]);
+      } else {
+        setModalHaircuts(mockHaircutStyles);
+        setSelectedHaircut(mockHaircutStyles[0]);
+      }
+    } catch {
+      setModalHaircuts(mockHaircutStyles);
+      setSelectedHaircut(mockHaircutStyles[0]);
+    } finally {
+      setIsLoadingModalHaircuts(false);
+    }
   };
 
   // Complete Dummy Payment
@@ -595,8 +670,10 @@ function CustomerHomeContent() {
     setToastMessage(`Payment Successful! Your Queue Token is #${newQueueToken}`);
   };
 
-  const currentToken = demoSimulatedPos ?? (queue ? queue.position : 3);
-  const isServing = currentToken === 1;
+  const currentTokenNumber = queue?.tokenNumber || (queue?.position ? `T-${String(queue.position).padStart(3, '0')}` : 'T-003');
+  const currentPos = demoSimulatedPos ?? (queue ? queue.position : 3);
+  const displayToken = demoSimulatedPos ? `T-${String(demoSimulatedPos).padStart(3, '0')}` : currentTokenNumber;
+  const isServing = currentPos === 1 || queue?.status === 'SERVING';
   const activeAppointment = appointments.find(a => a.status === 'CONFIRMED');
 
   return (
@@ -721,13 +798,19 @@ function CustomerHomeContent() {
                       Or select your city directly:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {['Mumbai', 'Bengaluru', 'Delhi NCR', 'Pune', 'Hyderabad', 'Chennai'].map((city) => (
+                      {[
+                        { val: 'Bengaluru 560001', label: 'Bengaluru (560001)' },
+                        { val: 'Mumbai 400050', label: 'Mumbai (400050)' },
+                        { val: 'Pune 411001', label: 'Pune (411001)' },
+                        { val: 'Delhi NCR 110001', label: 'Delhi NCR (110001)' },
+                        { val: 'Hyderabad 500033', label: 'Hyderabad (500033)' }
+                      ].map((loc) => (
                         <button
-                          key={city}
+                          key={loc.val}
                           type="button"
-                          onClick={() => handleSelectCityManually(city)}
+                          onClick={() => handleSelectCityManually(loc.val)}
                           className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                            userLocation.toLowerCase().includes(city.toLowerCase())
+                            userLocation.toLowerCase().includes(loc.val.toLowerCase().split(' ')[0])
                               ? isLight
                                 ? 'bg-[#6f331d] text-white border-[#6f331d]'
                                 : 'bg-amber-500 text-slate-950 border-amber-500'
@@ -736,7 +819,7 @@ function CustomerHomeContent() {
                               : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-amber-500/50 hover:text-white'
                           }`}
                         >
-                          📍 {city}
+                          📍 {loc.label}
                         </button>
                       ))}
                     </div>
@@ -806,7 +889,7 @@ function CustomerHomeContent() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search salon name (e.g. SalonPulse, Atelier, Urban Barber)..."
+                    placeholder="Search salon name, haircut, or 6-digit pincode (e.g. 560001)..."
                     className={`w-full pl-10 pr-10 py-3.5 rounded-2xl text-xs sm:text-sm font-medium border focus:outline-none transition-all ${
                       isLight
                         ? 'bg-white border-[#d9c2ba] text-[#1e1b18] placeholder:text-slate-400 focus:border-[#8c4a32] shadow-xs'
@@ -887,10 +970,10 @@ function CustomerHomeContent() {
             }`}
           >
             <div className="flex items-start sm:items-center gap-4">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 ${
+              <div className={`w-16 h-14 rounded-2xl flex items-center justify-center font-black text-xl font-mono shrink-0 ${
                 isLight ? 'bg-[#ffdbce] text-[#6f331d]' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               }`}>
-                #{currentToken}
+                {displayToken}
               </div>
 
               <div>
@@ -899,9 +982,9 @@ function CustomerHomeContent() {
                     Active Booking • Live Queue
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                    isServing ? 'bg-blue-500 text-white animate-pulse' : 'bg-amber-500 text-slate-950'
+                    isServing ? 'bg-emerald-500 text-white animate-pulse' : 'bg-amber-500 text-slate-950'
                   }`}>
-                    {isServing ? 'Now Serving' : 'Waiting in Line'}
+                    {isServing ? '🔔 Now Serving' : `Position #${currentPos}`}
                   </span>
                 </div>
 
@@ -910,7 +993,7 @@ function CustomerHomeContent() {
                 </h2>
 
                 <p className="text-xs opacity-75 mt-0.5">
-                  Stylist: <strong>{activeAppointment.staffName}</strong> • {activeAppointment.appointmentDate} at {activeAppointment.appointmentTime} • Chair 2
+                  Stylist: <strong>{activeAppointment.staffName || queue?.staffName || 'Alex Rivera'}</strong> • {activeAppointment.appointmentDate} at {activeAppointment.appointmentTime} • Chair 2
                 </p>
               </div>
             </div>
@@ -919,7 +1002,7 @@ function CustomerHomeContent() {
               <div className="text-right mr-2 hidden sm:block">
                 <div className="text-[10px] uppercase font-bold opacity-60">Estimated Wait</div>
                 <div className={`text-base font-extrabold ${isLight ? 'text-[#8c4a32]' : 'text-emerald-400'}`}>
-                  {isServing ? '0 mins' : `~${currentToken * 10} mins`}
+                  {isServing ? '0 mins (Turn Ready)' : `~${queue?.estimatedWaitMinutes ?? currentPos * 10} mins`}
                 </div>
               </div>
 
@@ -929,7 +1012,7 @@ function CustomerHomeContent() {
                   isLight ? 'bg-[#6f331d] hover:bg-[#8c4a32] text-white' : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                 }`}
               >
-                Track Live Queue (#{currentToken}) →
+                Track Live Queue ({displayToken}) →
               </Link>
 
               <button
@@ -952,26 +1035,52 @@ function CustomerHomeContent() {
         <section id="salons" className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${
                   isLight ? 'text-[#6f331d] font-serif' : 'text-white'
                 }`}>
-                  {isSearching ? `Matching Salon: "${searchQuery}"` : `Nearby Salons in ${userLocation.split(',')[0]}`}
+                  {isSearching
+                    ? `Matching Salon: "${searchQuery}"`
+                    : userPincode
+                    ? `Nearby Salons matching Pincode ${userPincode}`
+                    : `Nearby Salons in ${userLocation.split(',')[0]}`}
                 </h2>
                 {isSearching && (
                   <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
                     Active Filter
                   </span>
                 )}
+                {userPincode && !isSearching && (
+                  <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Pincode Active: {userPincode}
+                  </span>
+                )}
               </div>
               <p className="text-xs opacity-75 mt-0.5">
                 {isSearching
                   ? `Displaying only the matching salon card${filteredSalons.length === 1 ? '' : 's'} based on your search.`
+                  : userPincode
+                  ? `Showing salons closest to your area with postal code ${userPincode}. Salons with exact pincode matches are highlighted first.`
                   : 'Click "Book Appointment Now" on any salon card to choose your haircut, slot & pay'}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={loadSalonsData}
+                disabled={isFetchingSalons}
+                title="Refresh Real-Time Salons from API"
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-xs ${
+                  isLight
+                    ? 'bg-[#f7f1ee] border-[#d9c2ba] text-[#6f331d] hover:bg-[#ebdcd6]'
+                    : 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800'
+                }`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingSalons ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Sync Live Salons</span>
+              </button>
+
               {isSearching && (
                 <button
                   type="button"
@@ -999,7 +1108,7 @@ function CustomerHomeContent() {
               <SearchX className="w-12 h-12 mx-auto text-slate-400 mb-3" />
               <h3 className="text-lg font-bold">No salons found matching &quot;{searchQuery}&quot;</h3>
               <p className="text-xs opacity-70 mt-1 max-w-sm mx-auto">
-                Try searching for &quot;SalonPulse&quot;, &quot;Atelier&quot;, or &quot;Urban Barber&quot;.
+                Try searching by pincode (e.g. 560001), or names like &quot;SalonPulse&quot;, &quot;Atelier&quot;.
               </p>
               <button
                 type="button"
@@ -1019,32 +1128,69 @@ function CustomerHomeContent() {
                 ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
                 : 'grid-cols-1 md:grid-cols-3'
             }`}>
-              {filteredSalons.map((salon) => (
+              {filteredSalons.map((salon) => {
+                const isPincodeMatch = Boolean(
+                  userPincode && (salon.pincode === userPincode || salon.address.includes(userPincode))
+                );
+
+                return (
                 <div
                   key={salon.id}
                   className={`rounded-3xl border p-6 flex flex-col justify-between shadow-md transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden group ${
-                    isLight
+                    isPincodeMatch
+                      ? isLight
+                        ? 'bg-white border-emerald-500/50 ring-2 ring-emerald-500/20 shadow-emerald-500/10'
+                        : 'bg-[#121826] border-emerald-500/50 ring-2 ring-emerald-500/20 shadow-emerald-500/10'
+                      : isLight
                       ? 'bg-white border-[#e9e1dc] hover:border-[#8c4a32]/60'
                       : 'bg-[#121826] border-slate-800 hover:border-amber-500/50'
                   }`}
                 >
                   {/* Subtle top ambient sheen on hover */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r transition-opacity ${
+                    isPincodeMatch
+                      ? 'from-transparent via-emerald-400 to-transparent opacity-100'
+                      : 'from-transparent via-amber-500/40 to-transparent opacity-0 group-hover:opacity-100'
+                  }`} />
 
                   <div>
-                    {/* Header: Luxury Salon Icon + Status Badge */}
+                    {/* Header: Luxury Salon Icon + Status Badge + Pincode Match */}
                     <div className="flex items-start justify-between gap-3 mb-4">
                       {renderSalonIcon(salon.iconType)}
-                      {salon.badge && (
-                        <span className={`text-[10px] font-black tracking-wider uppercase px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-xs border shrink-0 ${
-                          isLight
-                            ? 'bg-[#ffede6] text-[#6f331d] border-[#6f331d]/20'
-                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                        }`}>
-                          <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span>{salon.badge}</span>
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-1.5">
+                        {isPincodeMatch && (
+                          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-xs bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/40 animate-pulse">
+                            <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            <span>Pincode Match ({salon.pincode || userPincode})</span>
+                          </span>
+                        )}
+                        {!isPincodeMatch && salon.badge && (
+                          <span className={`text-[10px] font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs border shrink-0 ${
+                            isLight
+                              ? 'bg-[#ffede6] text-[#6f331d] border-[#6f331d]/20'
+                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          }`}>
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>{salon.badge}</span>
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {salon.salonType && (
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border tracking-wider ${
+                              isLight
+                                ? 'bg-amber-100/80 text-amber-800 border-amber-300'
+                                : 'bg-slate-800 text-amber-400 border-slate-700'
+                            }`}>
+                              {salon.salonType}
+                            </span>
+                          )}
+                          {salon.pincode && (
+                            <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md border bg-slate-800/80 text-slate-300 border-slate-700">
+                              PIN: {salon.pincode}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <h3 className="text-lg font-extrabold leading-snug tracking-tight">
@@ -1059,14 +1205,40 @@ function CustomerHomeContent() {
                       </span>
                       <span className="opacity-60 font-normal">({salon.reviews} reviews)</span>
                       <span className="opacity-40">•</span>
-                      <span className="text-emerald-500 font-semibold">{salon.distance}</span>
+                      <span className={`font-semibold ${isPincodeMatch ? 'text-emerald-500 font-bold' : 'text-emerald-500'}`}>
+                        {isPincodeMatch ? '0.4 km (Direct Pincode Match)' : salon.distance}
+                      </span>
                     </div>
 
                     {/* Address with MapPin */}
                     <p className="text-xs opacity-75 mt-2.5 flex items-start gap-1.5 leading-relaxed">
-                      <MapPin className="w-3.5 h-3.5 text-[#8c4a32] dark:text-amber-400 shrink-0 mt-0.5" />
+                      <MapPin className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${isPincodeMatch ? 'text-emerald-500' : 'text-[#8c4a32] dark:text-amber-400'}`} />
                       <span className="line-clamp-2">{salon.address}</span>
                     </p>
+
+                    {/* Live Timing & Contact Details from API */}
+                    {(salon.operatingTimings || salon.phone || salon.email) && (
+                      <div className="mt-3 pt-3 border-t border-slate-800/40 space-y-1.5 text-xs">
+                        {salon.operatingTimings && (
+                          <div className="flex items-center gap-2 text-[11px] opacity-80">
+                            <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>Hours: <strong>{salon.operatingTimings}</strong></span>
+                          </div>
+                        )}
+                        {salon.phone && (
+                          <div className="flex items-center gap-2 text-[11px] opacity-80">
+                            <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            <span>Phone: <strong>{salon.phone}</strong></span>
+                          </div>
+                        )}
+                        {salon.email && (
+                          <div className="flex items-center gap-2 text-[11px] opacity-70">
+                            <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                            <span className="truncate">{salon.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Live Status Indicators (Chairs & Queue) */}
                     <div className={`mt-4 p-3.5 rounded-2xl text-xs flex items-center justify-between border ${
@@ -1102,7 +1274,7 @@ function CustomerHomeContent() {
                     </div>
                   </div>
 
-                  {/* Booking CTA Button */}
+                  {/* Booking CTA Buttons */}
                   <div className="mt-6 pt-4 border-t border-inherit flex items-center gap-2">
                     <Link
                       href={`/customer/book?salonId=${salon.id}`}
@@ -1113,11 +1285,24 @@ function CustomerHomeContent() {
                       }`}
                     >
                       <Calendar className="w-4 h-4 transition-transform group-hover/btn:scale-110" />
-                      <span>Book Appointment Now</span>
+                      <span>Book Appointment</span>
                     </Link>
+                    <button
+                      onClick={() => handleStartBooking(salon)}
+                      className={`px-3.5 py-3.5 rounded-2xl font-bold text-xs border transition-all flex items-center justify-center gap-1.5 shrink-0 ${
+                        isLight
+                          ? 'border-[#d9c2ba] hover:bg-[#f4ece7] text-[#6f331d]'
+                          : 'border-slate-700 hover:bg-slate-800 text-amber-400'
+                      }`}
+                      title="Quick Book Haircut Modal"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Quick</span>
+                    </button>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </section>
@@ -1229,53 +1414,167 @@ function CustomerHomeContent() {
               </div>
             )}
 
-            {/* STEP 1: SELECT TYPE OF HAIRCUT */}
+            {/* STEP 1: SELECT TYPE OF HAIRCUT (REAL-TIME BACKEND INTEGRATED) */}
             {bookingStep === 1 && (
-              <div className="py-5 space-y-4">
-                <div className="text-xs opacity-75">
-                  Choose the haircut or grooming treatment you desire:
+              <div className="py-4 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Haircut Catalog
+                    </span>
+                    <p className="text-xs opacity-75 mt-1">
+                      Choose your haircut style for today at {selectedSalon.name}:
+                    </p>
+                  </div>
+                  {/* Gender Filter for Modal */}
+                  <div className="flex items-center gap-1">
+                    {[
+                      { id: 'ALL', label: 'All' },
+                      { id: 'MALE', label: 'Men' },
+                      { id: 'FEMALE', label: 'Women' }
+                    ].map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => setModalGenderFilter(g.id as any)}
+                        className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all ${
+                          modalGenderFilter === g.id
+                            ? isLight
+                              ? 'bg-[#6f331d] text-white'
+                              : 'bg-amber-500 text-slate-950 font-black'
+                            : isLight
+                            ? 'bg-[#f4ece7] text-[#53433e]'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                  {selectedSalon.services.map((srv) => (
-                    <div
-                      key={srv.id}
-                      onClick={() => setSelectedHaircut(srv)}
-                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                        selectedHaircut?.id === srv.id
-                          ? isLight
-                            ? 'bg-[#ffdbce] border-[#6f331d] shadow-sm'
-                            : 'bg-amber-500/15 border-amber-500 text-white'
-                          : isLight
-                          ? 'bg-white border-[#e9e1dc] hover:border-[#8c4a32]'
-                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-amber-500">
-                          {srv.cat}
-                        </span>
-                        <div className="font-bold text-sm mt-0.5">{srv.name}</div>
-                        <div className="text-xs opacity-60">{srv.duration} mins duration</div>
+                {isLoadingModalHaircuts ? (
+                  <div className="space-y-2 py-3">
+                    {[1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className={`p-3.5 rounded-2xl border animate-pulse flex items-center justify-between ${
+                          isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800/40 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-slate-400/20" />
+                          <div className="space-y-1.5">
+                            <div className="h-3.5 w-32 bg-slate-400/20 rounded" />
+                            <div className="h-2.5 w-44 bg-slate-400/15 rounded" />
+                          </div>
+                        </div>
+                        <div className="h-4 w-12 bg-slate-400/20 rounded" />
                       </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {(modalHaircuts.length > 0 ? modalHaircuts : selectedSalon.services).filter((srv: any) => {
+                      if (modalGenderFilter !== 'ALL') {
+                        const sGender = String(srv.gender || 'UNISEX').toUpperCase();
+                        if (modalGenderFilter === 'MALE' && sGender !== 'MALE') return false;
+                        if (modalGenderFilter === 'FEMALE' && sGender !== 'FEMALE') return false;
+                      }
+                      return true;
+                    }).map((srv: any) => {
+                      const isSelected = selectedHaircut?.id === srv.id;
+                      const sGender = String(srv.gender || 'UNISEX').toUpperCase();
+                      const dur = srv.durationMinutes || srv.duration || 30;
 
-                      <div className="text-right shrink-0">
-                        <div className="text-base font-black text-amber-500">₹{srv.price}</div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          selectedHaircut?.id === srv.id ? 'bg-amber-500 text-slate-950' : 'opacity-60'
-                        }`}>
-                          {selectedHaircut?.id === srv.id ? 'Selected ✓' : 'Select'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      return (
+                        <div
+                          key={srv.id}
+                          onClick={() => setSelectedHaircut(srv)}
+                          className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 group ${
+                            isSelected
+                              ? isLight
+                                ? 'bg-[#ffdbce] border-[#6f331d] shadow-sm'
+                                : 'bg-amber-500/15 border-amber-500 text-white shadow-md shadow-amber-500/10'
+                              : isLight
+                              ? 'bg-white border-[#e9e1dc] hover:border-[#8c4a32]'
+                              : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {srv.imageUrl ? (
+                              <img
+                                src={srv.imageUrl}
+                                alt={srv.name}
+                                className="w-12 h-12 rounded-xl object-cover border border-inherit shrink-0"
+                                onError={(e: any) => {
+                                  e.currentTarget.src =
+                                    sGender === 'FEMALE'
+                                      ? 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=500'
+                                      : 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                                ✂️
+                              </div>
+                            )}
 
-                <div className="pt-4 border-t border-inherit flex justify-end">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-xs sm:text-sm truncate">{srv.name}</span>
+                                {srv.gender && (
+                                  <span
+                                    className={`text-[8px] uppercase font-black px-1.5 py-0.2 rounded border ${
+                                      sGender === 'FEMALE'
+                                        ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                                        : sGender === 'MALE'
+                                        ? 'bg-sky-500/10 text-sky-500 border-sky-500/20'
+                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    }`}
+                                  >
+                                    {sGender}
+                                  </span>
+                                )}
+                              </div>
+                              {srv.description && (
+                                <div className="text-[11px] opacity-70 truncate max-w-xs">{srv.description}</div>
+                              )}
+                              <div className="text-[10px] opacity-60 mt-0.5">⏱ {dur} mins duration</div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="text-sm sm:text-base font-black text-amber-500">₹{srv.price}</div>
+                            <span
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                isSelected ? 'bg-amber-500 text-slate-950' : 'opacity-60'
+                              }`}
+                            >
+                              {isSelected ? 'Selected ✓' : 'Select'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-inherit flex items-center justify-between">
+                  <span className="text-[11px] opacity-70">
+                    Selected:{' '}
+                    <strong className="text-amber-500">{selectedHaircut ? selectedHaircut.name : 'None'}</strong> (₹
+                    {selectedHaircut ? selectedHaircut.price : 0})
+                  </span>
                   <button
                     onClick={() => setBookingStep(2)}
-                    className={`px-6 py-2.5 rounded-xl font-bold text-xs shadow-md ${
-                      isLight ? 'bg-[#6f331d] text-white hover:bg-[#8c4a32]' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                    disabled={!selectedHaircut}
+                    className={`px-6 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all ${
+                      selectedHaircut
+                        ? isLight
+                          ? 'bg-[#6f331d] text-white hover:bg-[#8c4a32]'
+                          : 'bg-amber-500 text-slate-950 hover:bg-amber-400 font-black'
+                        : 'opacity-40 cursor-not-allowed bg-slate-600 text-white'
                     }`}
                   >
                     Continue to Timing →
