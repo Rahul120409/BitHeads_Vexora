@@ -33,8 +33,50 @@ public class QueueService {
     private final SalonServiceRepository serviceRepository;
     private final StaffRepository staffRepository;
 
+    public synchronized int getNextSequenceNumber() {
+        int maxToken = 0;
+
+        // 1. Scan active queue items (SERVING & WAITING)
+        List<QueueItem> activeItems = queueItemRepository.findByStatusInOrderByPositionAsc(
+                List.of(QueueStatus.SERVING, QueueStatus.WAITING)
+        );
+        for (QueueItem q : activeItems) {
+            if (q.getAppointment() != null) {
+                int t = parseToken(q.getAppointment().getTokenNumber(), q.getAppointment().getId());
+                if (t > maxToken) maxToken = t;
+            }
+        }
+
+        // 2. Scan all appointments in database
+        List<Appointment> allAppts = appointmentRepository.findAll();
+        for (Appointment a : allAppts) {
+            int t = parseToken(a.getTokenNumber(), a.getId());
+            if (t > maxToken) maxToken = t;
+        }
+
+        return maxToken + 1;
+    }
+
+    private int parseToken(String tokenStr, Long fallbackId) {
+        if (tokenStr != null && !tokenStr.isBlank()) {
+            String clean = tokenStr.replaceAll("[^0-9]", "");
+            if (!clean.isBlank()) {
+                try {
+                    return Integer.parseInt(clean);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return fallbackId != null ? fallbackId.intValue() : 0;
+    }
+
     @Transactional
-    public QueueItem enqueueAppointment(Appointment appointment) {
+    public synchronized QueueItem enqueueAppointment(Appointment appointment) {
+        if (appointment.getTokenNumber() == null || appointment.getTokenNumber().isBlank()) {
+            int nextSeq = getNextSequenceNumber();
+            appointment.setTokenNumber(String.valueOf(nextSeq));
+            appointmentRepository.save(appointment);
+        }
+
         // Find current waiting list to determine position and wait time
         List<QueueItem> waitingItems = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.WAITING);
 
@@ -59,13 +101,27 @@ public class QueueService {
                 .joinedAt(LocalDateTime.now())
                 .build();
 
-        return queueItemRepository.save(queueItem);
+        QueueItem saved = queueItemRepository.save(queueItem);
+        recalculateQueue();
+        return saved;
     }
 
     @Transactional
     public void recalculateQueue() {
+        // Enforce strict sequence order on all active queue items
+        List<QueueItem> servingList = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.SERVING);
+        int lastToken = 0;
+        for (QueueItem s : servingList) {
+            if (s.getAppointment() != null) {
+                int sToken = parseToken(s.getAppointment().getTokenNumber(), s.getAppointment().getId());
+                if (sToken > lastToken) lastToken = sToken;
+                s.getAppointment().setTokenNumber(String.valueOf(lastToken));
+                appointmentRepository.save(s.getAppointment());
+            }
+        }
+
         List<QueueItem> waitingList = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.WAITING);
-        long servingCount = queueItemRepository.countByStatus(QueueStatus.SERVING);
+        long servingCount = servingList.size();
 
         int runningWaitTime = servingCount > 0 ? 10 : 0;
         int position = 1;
@@ -77,6 +133,16 @@ public class QueueService {
                     ? item.getAppointment().getService().getDurationMinutes()
                     : 20;
             runningWaitTime += serviceDuration;
+
+            if (item.getAppointment() != null) {
+                int itemToken = parseToken(item.getAppointment().getTokenNumber(), item.getAppointment().getId());
+                if (itemToken <= lastToken) {
+                    itemToken = lastToken + 1;
+                    item.getAppointment().setTokenNumber(String.valueOf(itemToken));
+                    appointmentRepository.save(item.getAppointment());
+                }
+                lastToken = itemToken;
+            }
         }
 
         queueItemRepository.saveAll(waitingList);
@@ -108,6 +174,19 @@ public class QueueService {
     public QueueDto.QueueResponse startService(Long queueId) {
         QueueItem item = queueItemRepository.findById(queueId)
                 .orElseThrow(() -> new RuntimeException("Queue item not found with id " + queueId));
+
+        // Mark any previous SERVING items as COMPLETED
+        List<QueueItem> currentlyServing = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.SERVING);
+        for (QueueItem prev : currentlyServing) {
+            if (!prev.getId().equals(queueId)) {
+                prev.setStatus(QueueStatus.COMPLETED);
+                if (prev.getAppointment() != null) {
+                    prev.getAppointment().setStatus(AppointmentStatus.COMPLETED);
+                    appointmentRepository.save(prev.getAppointment());
+                }
+                queueItemRepository.save(prev);
+            }
+        }
 
         item.setStatus(QueueStatus.SERVING);
         item.setEstimatedWaitMinutes(0);
@@ -213,15 +292,17 @@ public class QueueService {
         return mapToResponse(queued);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public QueueDto.QueueSummaryResponse getQueueSummary() {
+        recalculateQueue();
+
         List<QueueItem> servingItems = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.SERVING);
         List<QueueItem> waitingItems = queueItemRepository.findByStatusOrderByPositionAsc(QueueStatus.WAITING);
 
         List<QueueDto.QueueResponse> servingResponses = servingItems.stream().map(this::mapToResponse).collect(Collectors.toList());
         List<QueueDto.QueueResponse> waitingResponses = waitingItems.stream().map(this::mapToResponse).collect(Collectors.toList());
 
-        String ongoingToken = "None (Queue Idle)";
+        String ongoingToken = "None";
         String ongoingCustomer = "None";
         String ongoingStylist = "None";
 
@@ -231,15 +312,15 @@ public class QueueService {
             ongoingCustomer = firstServing.getCustomerName();
             ongoingStylist = firstServing.getStaffName();
         } else if (!waitingResponses.isEmpty()) {
-            ongoingToken = "Next Up: " + waitingResponses.get(0).getTokenNumber();
+            ongoingToken = waitingResponses.get(0).getTokenNumber();
             ongoingCustomer = waitingResponses.get(0).getCustomerName();
             ongoingStylist = waitingResponses.get(0).getStaffName();
         }
 
         int estWait = waitingResponses.stream().mapToInt(q -> q.getEstimatedWaitMinutes() != null ? q.getEstimatedWaitMinutes() : 0).max().orElse(0);
 
-        Long nextApptId = appointmentRepository.findMaxId() + 1;
-        String nextAvailableToken = String.format("T-%03d", nextApptId);
+        int nextAvailableNum = getNextSequenceNumber();
+        String nextAvailableToken = String.valueOf(nextAvailableNum);
         int nextQueuePosition = waitingResponses.size() + 1;
 
         int waitForNext = waitingResponses.stream()
@@ -272,10 +353,20 @@ public class QueueService {
         Integer duration = appt.getService() != null ? appt.getService().getDurationMinutes() : 30;
         String staffName = appt.getStaff() != null ? appt.getStaff().getName() : "Any Available Stylist";
 
+        String token = appt.getTokenNumber();
+        if (token == null || token.isBlank()) {
+            token = String.valueOf(appt.getId());
+        } else {
+            String clean = token.replaceAll("[^0-9]", "");
+            if (!clean.isBlank()) {
+                token = clean;
+            }
+        }
+
         return QueueDto.QueueResponse.builder()
                 .queueId(item.getId())
                 .appointmentId(appt.getId())
-                .tokenNumber(String.format("T-%03d", appt.getId()))
+                .tokenNumber(token)
                 .customerId(appt.getCustomer() != null ? appt.getCustomer().getId() : null)
                 .customerName(customerName)
                 .customerPhone(customerPhone)

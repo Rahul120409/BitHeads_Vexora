@@ -59,16 +59,22 @@ function LiveQueueContent() {
     }
   };
 
-  // Step 3: Auto-polling (every 8-10 seconds)
+  const formatTokenDisplay = (token?: string | null) => {
+    if (!token) return '#7';
+    const clean = String(token).replace(/^T-0*/i, '').replace(/^#/i, '');
+    return `#${clean || '7'}`;
+  };
+
+  // Step 3: Silent real-time auto-polling every 3 seconds
   useEffect(() => {
     fetchLiveQueue();
-    const interval = setInterval(fetchLiveQueue, 8000);
+    const interval = setInterval(fetchLiveQueue, 3000);
     return () => clearInterval(interval);
   }, []);
 
   const currentPos = demoPosition ?? (queueData?.position ?? 3);
   const isServing = currentPos === 1 || queueData?.status === 'SERVING';
-  const tokenNumber = queueData?.tokenNumber || (queueData?.position ? `T-${String(queueData.position).padStart(3, '0')}` : 'T-003');
+  const tokenNumber = formatTokenDisplay(queueData?.tokenNumber);
   const waitMinutes = isServing ? 0 : (queueData?.estimatedWaitMinutes ?? currentPos * 10);
   const peopleAhead = Math.max(0, currentPos - 1);
 

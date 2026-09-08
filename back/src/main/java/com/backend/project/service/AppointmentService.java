@@ -89,7 +89,7 @@ public class AppointmentService {
 
         return AppointmentDto.BookResponse.builder()
                 .appointmentId(savedAppt.getId())
-                .tokenNumber(String.format("T-%03d", savedAppt.getId()))
+                .tokenNumber(savedAppt.getTokenNumber() != null ? savedAppt.getTokenNumber() : String.valueOf(savedAppt.getId()))
                 .queuePosition(queueItem.getPosition())
                 .estimatedWaitMinutes(queueItem.getEstimatedWaitMinutes())
                 .status(savedAppt.getStatus())
@@ -112,9 +112,9 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public List<AppointmentDto.AppointmentResponse> getTodayAppointments() {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
-        return appointmentRepository.findTodayAppointments(startOfDay, endOfDay)
+        LocalDateTime start = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+        LocalDateTime end = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+        return appointmentRepository.findTodayAppointments(start, end)
                 .stream().map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -144,9 +144,19 @@ public class AppointmentService {
     public AppointmentDto.AppointmentResponse mapToResponse(Appointment appt) {
         String phone = appt.getCustomerPhone() != null ? appt.getCustomerPhone() : (appt.getCustomer() != null ? appt.getCustomer().getMobileNumber() : null);
 
+        String token = appt.getTokenNumber();
+        if (token == null || token.isBlank()) {
+            token = String.valueOf(appt.getId());
+        } else {
+            String clean = token.replaceAll("[^0-9]", "");
+            if (!clean.isBlank()) {
+                token = clean;
+            }
+        }
+
         return AppointmentDto.AppointmentResponse.builder()
                 .id(appt.getId())
-                .tokenNumber(String.format("T-%03d", appt.getId()))
+                .tokenNumber(token)
                 .customerId(appt.getCustomer() != null ? appt.getCustomer().getId() : null)
                 .customerName(appt.getCustomer() != null ? appt.getCustomer().getName() : appt.getCustomerName())
                 .customerPhone(phone)

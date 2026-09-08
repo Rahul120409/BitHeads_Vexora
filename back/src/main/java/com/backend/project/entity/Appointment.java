@@ -46,6 +46,9 @@ public class Appointment {
     @Column(nullable = false)
     private AppointmentStatus status = AppointmentStatus.CONFIRMED;
 
+    @Column(name = "token_number")
+    private String tokenNumber;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
