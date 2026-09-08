@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CustomerUser, CustomerQueueStatus } from '../../mock/customerMock';
@@ -12,6 +13,23 @@ interface NavbarProps {
 
 export default function CustomerNavbar({ user, queue }: NavbarProps) {
   const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(user || null);
+
+  useEffect(() => {
+    if (!user) {
+      const u = customerService.getCurrentUser();
+      setCurrentUser(u);
+    }
+  }, [user]);
+
+  const activeUser = user || currentUser;
+  const displayName = activeUser?.name || 'Customer';
+  const initials = displayName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   const handleLogout = () => {
     customerService.logout();
@@ -86,13 +104,13 @@ export default function CustomerNavbar({ user, queue }: NavbarProps) {
           {/* User Profile Pill */}
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm">
-              {user ? user.name.split(' ').map(n => n[0]).join('') : 'RS'}
+              {initials}
             </div>
             <div className="hidden sm:block text-left">
               <div className="text-xs font-bold text-slate-200 leading-tight">
-                {user ? user.name : 'Rahul Sharma'}
+                {displayName}
               </div>
-              <div className="text-[10px] text-slate-500">Customer</div>
+              <div className="text-[10px] text-slate-500">{activeUser?.role || 'Customer'}</div>
             </div>
             <button
               onClick={handleLogout}

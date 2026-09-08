@@ -3,7 +3,11 @@ export interface CustomerUser {
   name: string;
   email: string;
   phone: string;
+  mobileNumber?: string;
   role: 'CUSTOMER' | 'STAFF' | 'ADMIN';
+  userType?: string;
+  staffId?: number | null;
+  token?: string;
 }
 
 export interface SalonService {
@@ -63,8 +67,8 @@ export interface CustomerQueueStatus {
 // Current logged in demo customer
 export const mockCustomer: CustomerUser = {
   id: 1,
-  name: "Rahul Sharma",
-  email: "rahul@example.com",
+  name: "Prapti Meher",
+  email: "prapti@example.com",
   phone: "+91 98765 43210",
   role: "CUSTOMER"
 };

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeContext';
 import { customerService } from '../../services/customerService';
+import { CustomerUser } from '../../mock/customerMock';
 
 interface NavbarProps {
   userLocation?: string;
@@ -16,13 +17,21 @@ interface NavbarProps {
 export default function Navbar({
   userLocation = 'Downtown, Metro Area',
   onChangeLocation,
-  userName = 'Rahul Sharma',
+  userName,
   userRole = 'Privilège Member'
 }: NavbarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme, isLight } = useTheme();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(null);
+
+  useEffect(() => {
+    const u = customerService.getCurrentUser();
+    setCurrentUser(u);
+  }, []);
+
+  const activeUserName = userName || currentUser?.name || 'Customer';
 
   const handleLogout = () => {
     customerService.logout();
@@ -163,7 +172,7 @@ export default function Navbar({
                 </div>
                 <div className="py-1">
                   <div className="font-bold text-xs">Live Queue Status</div>
-                  <p className="text-[11px] opacity-80 mt-0.5">You are #3 in queue for Signature Haircut at Downtown Studio.</p>
+                  <p className="text-[11px] opacity-80 mt-0.5">Welcome, {activeUserName}! You are currently connected.</p>
                 </div>
               </div>
             )}
@@ -179,7 +188,7 @@ export default function Navbar({
             }`}
           >
             <div className="w-8 h-8 rounded-full bg-[#6f331d] text-white font-bold text-xs flex items-center justify-center">
-              {userName
+              {activeUserName
                 .split(' ')
                 .map((n) => n[0])
                 .join('')
@@ -187,7 +196,7 @@ export default function Navbar({
                 .toUpperCase()}
             </div>
             <div className="hidden sm:block text-left text-xs">
-              <div className="font-bold leading-tight">{userName}</div>
+              <div className="font-bold leading-tight">{activeUserName}</div>
               <div className={`text-[10px] uppercase tracking-wider font-semibold ${
                 isLight ? 'text-[#8c4a32]' : 'text-amber-400'
               }`}>

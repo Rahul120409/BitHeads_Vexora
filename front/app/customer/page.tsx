@@ -44,8 +44,8 @@ function CustomerHomeContent() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('10:30 AM');
   const [selectedDate, setSelectedDate] = useState('Today');
   const [selectedStylist, setSelectedStylist] = useState('Raj Malhotra');
-  const [customerName, setCustomerName] = useState('Rahul Sharma');
-  const [customerPhone, setCustomerPhone] = useState('+91 98765 43210');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'counter'>('upi');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentSuccessData, setPaymentSuccessData] = useState<any>(null);
@@ -54,11 +54,10 @@ function CustomerHomeContent() {
     let currentUser = customerService.getCurrentUser();
     if (!currentUser) {
       currentUser = mockCustomer;
-      customerService.setCurrentUser(mockCustomer);
     }
     setUser(currentUser);
     setCustomerName(currentUser.name);
-    setCustomerPhone(currentUser.phone);
+    setCustomerPhone(currentUser.phone || currentUser.mobileNumber || '');
 
     customerService.getQueueStatus(currentUser.id).then(setQueue);
     customerService.getAppointments(currentUser.id).then(setAppointments);
@@ -245,7 +244,7 @@ function CustomerHomeContent() {
         isLight ? 'bg-[#fff8f4] text-[#1e1b18]' : 'bg-[#0B0F17] text-slate-100'
       }`}
     >
-      <Navbar userLocation={userLocation} onChangeLocation={setUserLocation} />
+      <Navbar userLocation={userLocation} onChangeLocation={setUserLocation} userName={user?.name} />
 
       {/* Floating Toast Notification */}
       {toastMessage && (
