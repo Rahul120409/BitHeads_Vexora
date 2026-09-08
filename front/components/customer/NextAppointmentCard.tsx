@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Scissors, Calendar, CreditCard, MapPin, Star, ArrowRight } from 'lucide-react';
 import { CustomerAppointment } from '../../mock/customerMock';
 
 interface NextAppointmentCardProps {
@@ -17,7 +18,7 @@ export default function NextAppointmentCard({ appointment, onCancel }: NextAppoi
     return (
       <div className="bg-[#121826] border border-slate-800/80 rounded-2xl p-8 text-center shadow-lg">
         <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xl mx-auto mb-3">
-          ✂️
+          <Scissors className="w-5 h-5 stroke-[2.2]" />
         </div>
         <h3 className="text-lg font-bold text-white">Ready for your next look?</h3>
         <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
@@ -61,23 +62,35 @@ export default function NextAppointmentCard({ appointment, onCancel }: NextAppoi
         <div className="mt-2 text-sm text-slate-300 flex items-center gap-2">
           <span className="text-slate-400">with</span>
           <strong className="text-white font-bold">{appointment.staffName}</strong>
-          <span className="text-amber-400 text-xs">★ 4.9 (Master Stylist)</span>
+          <span className="text-amber-400 text-xs flex items-center gap-1">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span>4.9 (Master Stylist)</span>
+          </span>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-6 text-xs text-slate-300">
           <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-            <span className="text-slate-500">📅 Schedule:</span>
+            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+              <Calendar className="w-3.5 h-3.5 text-amber-400" />
+              <span>Schedule:</span>
+            </span>
             <strong className="text-white">{appointment.appointmentDate} • {appointment.appointmentTime}</strong>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-            <span className="text-slate-500">💳 Price:</span>
+            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+              <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+              <span>Price:</span>
+            </span>
             <strong className="text-amber-400 font-bold">₹{appointment.price}</strong>
             <span className="text-[10px] text-slate-400">({appointment.paymentStatus})</span>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-            <span className="text-slate-500">📍 Studio:</span>
+            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+              <MapPin className="w-3.5 h-3.5 text-amber-400" />
+              <span>Studio:</span>
+            </span>
             <span className="text-white font-medium">Chair 2 (Downtown)</span>
           </div>
         </div>
