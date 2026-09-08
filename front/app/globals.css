@@ -17,9 +17,8 @@
 }
 
 body {
-  background-color: #EFF5F7 !important;
-  color: #0c242c;
   font-family: Arial, Helvetica, sans-serif;
+  /* Background and text color are set by each page's root div */
 }
 
 /* Custom scrollbar */
@@ -39,4 +38,36 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #1ca0bb;
+}
+
+/* ── Splash Screen Animations ── */
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50%       { transform: scale(1.18); opacity: 0.95; }
+}
+@keyframes scissors-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-4px) rotate(2deg); }
+}
+@keyframes progress-2s {
+  0%   { width: 0%; }
+  25%  { width: 32%; }
+  65%  { width: 78%; }
+  100% { width: 100%; }
+}
+@keyframes ring-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-pulse-glow  { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-float       { animation: scissors-float 2.5s ease-in-out infinite; }
+.animate-progress-bar{ animation: progress-2s 2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-spin-slow   { animation: ring-spin 8s linear infinite; }
+
+.glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }

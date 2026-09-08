@@ -13,8 +13,10 @@ import {
   User,
   ShieldCheck,
   Menu,
-  X
+  X,
+  LogOut
 } from "lucide-react";
+import { customerService } from "../../../services/customerService";
 
 interface AdminNavbarProps {
   onToggleSidebar?: () => void;
@@ -175,10 +177,12 @@ export default function AdminNavbar({ onToggleSidebar, isSidebarOpen }: AdminNav
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
-                      alert("Logged out of Admin Portal");
+                      customerService.logout();
+                      window.location.href = '/';
                     }}
-                    className="w-full text-left px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 transition-colors font-bold"
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 transition-colors font-bold"
                   >
+                    <LogOut className="w-3.5 h-3.5" />
                     Sign Out
                   </button>
                 </div>

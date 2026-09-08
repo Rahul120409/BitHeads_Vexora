@@ -34,8 +34,8 @@ export default function RegisterPage() {
         userType: 'CUSTOMER'
       });
 
-      // Direct navigation to customer home page upon successful registration & login
-      window.location.href = '/customer';
+      // Navigate directly to Sign In form upon successful registration
+      window.location.href = '/login?registered=true';
     } catch (err: any) {
       setErrorMessage(err.message || '❌ Registration failed. Please check your details.');
       setIsLoading(false);
@@ -43,27 +43,27 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-amber-500 selection:text-slate-950">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-amber-500/10 blur-[120px] pointer-events-none rounded-full"></div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-6 px-3.5 sm:py-12 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-amber-500 selection:text-slate-950">
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[500px] h-[200px] sm:h-[300px] bg-amber-500/10 blur-[90px] sm:blur-[120px] pointer-events-none rounded-full"></div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
-        <Link href="/" className="inline-flex items-center gap-2 group mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
+      <div className="w-full max-w-md mx-auto relative z-10 text-center">
+        <Link href="/" className="inline-flex items-center gap-2 group mb-4 sm:mb-6">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-xl sm:text-2xl shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
             ✂
           </div>
           <div className="text-left">
-            <span className="text-2xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-amber-400 bg-clip-text text-transparent">
+            <span className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-amber-400 bg-clip-text text-transparent">
               SalonPulse
             </span>
-            <span className="block text-[11px] uppercase tracking-widest text-amber-400/90 font-semibold -mt-1">
+            <span className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-amber-400/90 font-semibold -mt-1">
               Live Operations
             </span>
           </div>
         </Link>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight">
           Create Your Customer Account
         </h2>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-400">
           Already registered?{' '}
           <Link href="/login" className="font-semibold text-amber-400 hover:text-amber-300 transition-colors">
             Sign In here
@@ -71,8 +71,8 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-slate-900/90 border border-slate-800/90 py-8 px-6 sm:px-8 shadow-2xl rounded-2xl backdrop-blur-md">
+      <div className="mt-6 sm:mt-8 w-full max-w-md mx-auto relative z-10">
+        <div className="bg-slate-900/90 border border-slate-800/90 py-6 px-4 sm:py-8 sm:px-8 shadow-2xl rounded-2xl sm:rounded-3xl backdrop-blur-md">
           {errorMessage && (
             <div className="mb-4 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
               <span>⚠️</span>
@@ -162,7 +162,7 @@ export default function RegisterPage() {
                   </span>
                 ) : (
                   <span className="text-[11px] text-rose-400 font-semibold mt-1 block">
-                    ❌ Confirm Password does not match Password
+                    ❌ Password is wrong
                   </span>
                 )
               )}
