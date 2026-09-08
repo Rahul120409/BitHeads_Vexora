@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ThemeProvider, useTheme } from '../../../components/customer/ThemeContext';
 import Navbar from '../../../components/customer/Navbar';
+import MobileNavigation from '../../../components/customer/MobileNavigation';
 import { customerService } from '../../../services/customerService';
 import { CustomerUser, mockCustomer } from '../../../mock/customerMock';
 
@@ -40,11 +41,11 @@ function ProfileContent() {
 
   return (
     <div
-      className={`min-h-screen transition-colors font-sans ${
+      className={`min-h-screen transition-colors font-sans pb-16 md:pb-0 ${
         isLight ? 'bg-[#fff8f4] text-[#1e1b18]' : 'bg-[#0B0F17] text-slate-100'
       }`}
     >
-      <Navbar />
+      <Navbar userName={name || user.name} userRole="Privilège Member" />
 
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 max-w-sm px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold animate-bounce bg-[#121826] border-amber-500 text-amber-300">
@@ -223,6 +224,7 @@ function ProfileContent() {
         </div>
 
       </main>
+      <MobileNavigation />
     </div>
   );
 }
